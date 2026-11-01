@@ -46,13 +46,22 @@ Plataforma unificada de respuesta preliminar y análisis forense rápido frente 
 
 ## 🚀 Despliegue y Ejecución Rápida
 
-### 1. Requisitos Previos en Arch Linux / CachyOS
+### 1. Requisitos Previos (Dependencia de Zbar)
 
-Instalar la biblioteca C nativa de decodificación QR del sistema:
+Anzuelo requiere la librería C de `zbar` instalada en el sistema para decodificar códigos QR mediante `pyzbar`. Según tu distribución de Linux, instalala con el gestor correspondiente:
 
-```bash
-sudo pacman -S --needed zbar
+- **Arch Linux / CachyOS:**
+  ```bash
+  sudo pacman -S --needed zbar
 
+
+- **Ubuntu / Debian / Linux Mint:**
+  ```bash
+  sudo apt install libzbar0
+
+- **Fedora / RHEL:**  
+  ```bash
+  sudo dnf install zbar
 
 # Clonar el Repositorio y Configurar el Entorno
 
