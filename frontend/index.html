@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Anzuelo · Validador OSINT de Phishing</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#ecfeff', 500: '#06b6d4', 600: '#0891b2', 700: '#0e7490', 900: '#164e63' },
+            cyber: { bg: '#090d16', card: '#0f172a', border: '#1e293b', accent: '#10b981' }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-[#090d16] text-slate-200 min-h-screen font-sans antialiased selection:bg-cyan-500 selection:text-black">
+
+  <!-- VISTA 1: LOGIN SPLIT SCREEN -->
+  <div id="view-login" class="min-h-screen flex flex-col lg:flex-row">
+    
+    <!-- LADO IZQUIERDO: LOGO IDENTIDAD & TELEMETRIA -->
+    <div class="lg:w-1/2 relative bg-gradient-to-br from-slate-950 via-[#0a1120] to-[#041a24] p-8 lg:p-14 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-800/80 overflow-hidden">
+      <div class="absolute -top-24 -left-24 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="absolute -bottom-24 -right-24 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div class="relative z-10 flex items-center gap-3 text-xs tracking-widest uppercase text-cyan-400 font-mono">
+        <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        OSINT Threat Triage Platform v1.0
+      </div>
+
+      <div class="relative z-10 my-auto py-10 flex flex-col items-center text-center">
+        <!-- Contenedor Logo Anzuelo -->
+        <div class="relative mb-8 group">
+          <div class="absolute -inset-2 bg-gradient-to-r from-cyan-500 to-emerald-500 rounded-2xl blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
+          <div class="relative w-36 h-36 rounded-2xl bg-slate-900 border border-cyan-500/40 flex items-center justify-center p-6 shadow-2xl">
+            <svg class="w-full h-full text-cyan-400 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)]" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="32" cy="12" r="4" class="text-emerald-400" fill="currentColor"/>
+              <line x1="32" y1="16" x2="32" y2="34"/>
+              <path d="M32 34 C32 48, 48 48, 48 34 L48 28"/>
+              <polyline points="43 32 48 26 53 32"/>
+            </svg>
+          </div>
+        </div>
+
+        <h1 class="text-3xl lg:text-4xl font-extrabold tracking-tight text-white mb-2">
+          Anzuelo <span class="text-cyan-400 font-light">·</span> <span class="bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent">Validador OSINT</span>
+        </h1>
+        <p class="text-slate-400 text-sm max-w-md">
+          Plataforma táctica de validación forense y respuesta preliminar contra vectores de ingeniería social.
+        </p>
+
+        <!-- Vectors Grid -->
+        <div class="grid grid-cols-3 gap-3 mt-8 w-full max-w-sm text-xs font-mono">
+          <div class="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800 text-slate-300">
+            <i class="fa-solid fa-envelope text-cyan-400 mb-1 block text-base"></i> Email
+          </div>
+          <div class="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800 text-slate-300">
+            <i class="fa-solid fa-comment-sms text-emerald-400 mb-1 block text-base"></i> Smishing
+          </div>
+          <div class="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800 text-slate-300">
+            <i class="fa-solid fa-qrcode text-amber-400 mb-1 block text-base"></i> Quishing
+          </div>
+        </div>
+      </div>
+
+      <div class="relative z-10 text-xs text-slate-500 flex justify-between items-center font-mono">
+        <span>Arch / CachyOS Environment</span>
+        <span>Local Core Engine</span>
+      </div>
+    </div>
+
+    <!-- LADO DERECHO: ACCESO & ROLES -->
+    <div class="lg:w-1/2 bg-[#090d16] p-8 lg:p-14 flex flex-col justify-center items-center relative">
+      <div class="w-full max-w-md space-y-6">
+        <div>
+          <h2 class="text-2xl font-bold text-white tracking-tight">Acceso a la Consola</h2>
+          <p class="text-slate-400 text-sm mt-1">Ingresá tus credenciales o seleccioná un perfil para continuar.</p>
+        </div>
+
+        <!-- Presets -->
+        <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-800">
+          <label class="text-[11px] font-mono uppercase tracking-wider text-slate-400 block mb-2">Roles preconfigurados:</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button onclick="setCredentials('admin', 'Administrador')" type="button" class="px-2 py-1.5 rounded bg-cyan-950/40 border border-cyan-800/40 text-cyan-300 text-xs hover:bg-cyan-900/60 transition">Admin</button>
+            <button onclick="setCredentials('analista', 'Analista OSINT')" type="button" class="px-2 py-1.5 rounded bg-emerald-950/40 border border-emerald-800/40 text-emerald-300 text-xs hover:bg-emerald-900/60 transition">Analista</button>
+            <button onclick="setCredentials('viewer', 'Visualizador')" type="button" class="px-2 py-1.5 rounded bg-slate-800 border border-slate-700 text-slate-300 text-xs hover:bg-slate-700 transition">Visualizador</button>
+          </div>
+        </div>
+
+        <!-- Formulario -->
+        <form onsubmit="handleLogin(event)" class="space-y-4">
+          <div>
+            <label class="block text-xs font-mono uppercase tracking-wider text-slate-300 mb-1.5">Identificador / Usuario</label>
+            <div class="relative">
+              <i class="fa-solid fa-user absolute left-3.5 top-3.5 text-slate-500 text-sm"></i>
+              <input id="login-user" type="text" required value="admin" class="w-full pl-10 pr-4 py-2.5 rounded-lg bg-slate-900 border border-slate-800 text-white text-sm focus:border-cyan-500 focus:outline-none transition font-mono">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-mono uppercase tracking-wider text-slate-300 mb-1.5">Contraseña</label>
+            <div class="relative">
+              <i class="fa-solid fa-lock absolute left-3.5 top-3.5 text-slate-500 text-sm"></i>
+              <input id="login-pass" type="password" required value="admin123" class="w-full pl-10 pr-10 py-2.5 rounded-lg bg-slate-900 border border-slate-800 text-white text-sm focus:border-cyan-500 focus:outline-none transition font-mono">
+              <button type="button" onclick="togglePass()" class="absolute right-3.5 top-3 text-slate-500 hover:text-slate-300 text-sm">
+                <i id="pass-icon" class="fa-solid fa-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" class="w-full py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-sm tracking-wide shadow-lg shadow-cyan-500/20 transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-fingerprint"></i> Autenticar en Plataforma
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- VISTA 2: DASHBOARD PRINCIPAL -->
+  <div id="view-dashboard" class="hidden min-h-screen flex flex-col">
+    <header class="bg-slate-900/80 border-b border-slate-800 px-6 py-3.5 flex items-center justify-between sticky top-0 z-30 backdrop-blur-md">
+      <div class="flex items-center gap-3">
+        <svg class="w-7 h-7 text-cyan-400" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3">
+          <circle cx="32" cy="12" r="4" fill="currentColor"/>
+          <line x1="32" y1="16" x2="32" y2="34"/>
+          <path d="M32 34 C32 48, 48 48, 48 34 L48 28"/>
+        </svg>
+        <span class="font-bold text-white tracking-wide">Anzuelo</span>
+        <span class="text-xs px-2 py-0.5 rounded bg-cyan-950 border border-cyan-800 text-cyan-400 font-mono" id="badge-rol">Admin</span>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <button onclick="openPassModal()" class="text-xs font-mono text-slate-300 hover:text-cyan-400 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-key"></i> Cambiar Clave
+        </button>
+        <button onclick="handleLogout()" class="text-xs font-mono text-rose-400 hover:text-rose-300 transition flex items-center gap-1.5">
+          <i class="fa-solid fa-arrow-right-from-bracket"></i> Salir
+        </button>
+      </div>
+    </header>
+
+    <main class="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+      <div class="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
+        <button onclick="switchTab('tab-email')" id="btn-tab-email" class="px-4 py-2 rounded-md bg-cyan-950 border border-cyan-800 text-cyan-300 text-xs font-mono transition">Análisis Email</button>
+        <button onclick="switchTab('tab-sms')" id="btn-tab-sms" class="px-4 py-2 rounded-md bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono transition">SMS / Smishing</button>
+        <button onclick="switchTab('tab-qr')" id="btn-tab-qr" class="px-4 py-2 rounded-md bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono transition">QR / Quishing</button>
+      </div>
+
+      <!-- Panel Email -->
+      <section id="tab-email" class="space-y-4">
+        <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-xl">
+          <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-envelope-open-text text-cyan-400"></i> Cabeceras RFC 822 / Raw Email
+          </h3>
+          <textarea id="email-raw" rows="6" placeholder="Pegá acá las cabeceras completas del correo para análisis..." class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-slate-300 focus:outline-none focus:border-cyan-500"></textarea>
+          <button onclick="analyzeEmail()" class="mt-3 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold rounded-lg text-xs transition">
+            Ejecutar Triage SPF/DKIM/DMARC
+          </button>
+        </div>
+        <div id="email-results" class="hidden bg-slate-900/40 border border-slate-800 p-4 rounded-xl text-xs font-mono space-y-2"></div>
+      </section>
+
+      <!-- Panel SMS -->
+      <section id="tab-sms" class="hidden space-y-4">
+        <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-xl">
+          <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-comment-sms text-emerald-400"></i> Mensaje SMS Sospechoso
+          </h3>
+          <textarea id="sms-text" rows="3" placeholder="Ej: Su cuenta bancaria ha sido bloqueada. Verifique de inmediato en https://bit.ly/..." class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-slate-300 focus:outline-none focus:border-emerald-500"></textarea>
+          <button onclick="analyzeSMS()" class="mt-3 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded-lg text-xs transition">
+            Evaluar Heurística de Coerción
+          </button>
+        </div>
+        <div id="sms-results" class="hidden bg-slate-900/40 border border-slate-800 p-4 rounded-xl text-xs font-mono space-y-2"></div>
+      </section>
+
+      <!-- Panel QR -->
+      <section id="tab-qr" class="hidden space-y-4">
+        <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-xl">
+          <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-qrcode text-amber-400"></i> Desempaquetador de QR Payload
+          </h3>
+          <input id="qr-url" type="text" placeholder="https://dominio-sospechoso.com/login" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-slate-300 focus:outline-none focus:border-amber-500">
+          <button onclick="analyzeQR()" class="mt-3 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded-lg text-xs transition">
+            Trazar Saltos HTTP e Inspección
+          </button>
+        </div>
+        <div id="qr-results" class="hidden bg-slate-900/40 border border-slate-800 p-4 rounded-xl text-xs font-mono space-y-2"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL CAMBIO DE CONTRASEÑA -->
+  <div id="modal-pass" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 max-w-sm w-full space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-white text-sm">Actualizar Contraseña</h3>
+        <button onclick="closePassModal()" class="text-slate-500 hover:text-white">&times;</button>
+      </div>
+      <form onsubmit="saveNewPass(event)" class="space-y-3">
+        <div>
+          <label class="block text-[11px] font-mono text-slate-400 mb-1">Clave Actual</label>
+          <input type="password" required class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white">
+        </div>
+        <div>
+          <label class="block text-[11px] font-mono text-slate-400 mb-1">Nueva Clave</label>
+          <input type="password" required class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-xs text-white">
+        </div>
+        <button type="submit" class="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold rounded text-xs transition">Guardar Cambios</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:8001';
+    let currentRole = 'Administrador';
+
+    function setCredentials(user, role) {
+      document.getElementById('login-user').value = user;
+      document.getElementById('login-pass').value = user + '123';
+      currentRole = role;
+    }
+
+    function togglePass() {
+      const pass = document.getElementById('login-pass');
+      const icon = document.getElementById('pass-icon');
+      if (pass.type === 'password') {
+        pass.type = 'text';
+        icon.className = 'fa-solid fa-eye-slash';
+      } else {
+        pass.type = 'password';
+        icon.className = 'fa-solid fa-eye';
+      }
+    }
+
+    function handleLogin(e) {
+      e.preventDefault();
+      document.getElementById('view-login').classList.add('hidden');
+      document.getElementById('view-dashboard').classList.remove('hidden');
+      document.getElementById('badge-rol').innerText = currentRole;
+    }
+
+    function handleLogout() {
+      document.getElementById('view-dashboard').classList.add('hidden');
+      document.getElementById('view-login').classList.remove('hidden');
+    }
+
+    function switchTab(tabId) {
+      ['tab-email', 'tab-sms', 'tab-qr'].forEach(id => {
+        document.getElementById(id).classList.add('hidden');
+        document.getElementById('btn-' + id).className = 'px-4 py-2 rounded-md bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono transition';
+      });
+      document.getElementById(tabId).classList.remove('hidden');
+      document.getElementById('btn-' + tabId).className = 'px-4 py-2 rounded-md bg-cyan-950 border border-cyan-800 text-cyan-300 text-xs font-mono transition';
+    }
+
+    function openPassModal() { document.getElementById('modal-pass').classList.remove('hidden'); }
+    function closePassModal() { document.getElementById('modal-pass').classList.add('hidden'); }
+    function saveNewPass(e) {
+      e.preventDefault();
+      alert('Contraseña actualizada correctamente.');
+      closePassModal();
+    }
+
+    async function analyzeEmail() {
+      const rawHeaders = document.getElementById('email-raw').value;
+      const resDiv = document.getElementById('email-results');
+      if (!rawHeaders.trim()) {
+        alert('Ingresá las cabeceras para analizar.');
+        return;
+      }
+
+      resDiv.classList.remove('hidden');
+      resDiv.innerHTML = '<div class="text-cyan-400 font-mono animate-pulse"><i class="fa-solid fa-spinner fa-spin"></i> Resolviendo registros DNS y cabeceras RFC...</div>';
+
+      try {
+        const response = await fetch(`${API_BASE}/api/analyze/email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ raw_headers: rawHeaders })
+        });
+        const data = await response.json();
+
+        const isHighRisk = data.risk_score >= 60;
+        resDiv.innerHTML = `
+          <div class="p-3 rounded-lg ${isHighRisk ? 'bg-rose-950/40 border border-rose-800/50' : 'bg-emerald-950/40 border border-emerald-800/50'} mb-2">
+            <span class="text-sm font-bold ${isHighRisk ? 'text-rose-400' : 'text-emerald-400'}">${data.verdict} (Score: ${data.risk_score}/100)</span>
+          </div>
+          <div><span class="text-slate-400">Remitente:</span> <span class="text-white">${data.from}</span></div>
+          <div><span class="text-slate-400">Dominio extraído:</span> <span class="text-cyan-400">${data.domain || 'N/A'}</span></div>
+          <div><span class="text-slate-400">Saltos SMTP:</span> <span class="text-white">${data.hops_count}</span></div>
+          <div><span class="text-slate-400">SPF TXT:</span> <span class="${data.spf.includes('DETECTED') ? 'text-emerald-400' : 'text-rose-400'}">${data.spf}</span></div>
+          <div><span class="text-slate-400">DMARC TXT:</span> <span class="${data.dmarc.includes('DETECTED') ? 'text-emerald-400' : 'text-rose-400'}">${data.dmarc}</span></div>
+          <div><span class="text-slate-400">Servidores MX:</span> <span class="text-slate-300">${data.mx_records.join(', ') || 'Sin registros MX'}</span></div>
+        `;
+      } catch (err) {
+        resDiv.innerHTML = `<div class="text-rose-400"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend en ${API_BASE}</div>`;
+      }
+    }
+
+    async function analyzeSMS() {
+      const message = document.getElementById('sms-text').value;
+      const resDiv = document.getElementById('sms-results');
+      if (!message.trim()) {
+        alert('Ingresá el texto del SMS.');
+        return;
+      }
+
+      resDiv.classList.remove('hidden');
+      resDiv.innerHTML = '<div class="text-emerald-400 font-mono animate-pulse"><i class="fa-solid fa-spinner fa-spin"></i> Evaluando heurística de coerción...</div>';
+
+      try {
+        const response = await fetch(`${API_BASE}/api/analyze/sms`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: message })
+        });
+        const data = await response.json();
+
+        resDiv.innerHTML = `
+          <div class="p-3 rounded-lg ${data.is_smishing_probable ? 'bg-rose-950/40 border border-rose-800/50' : 'bg-emerald-950/40 border border-emerald-800/50'} mb-2">
+            <span class="text-sm font-bold ${data.is_smishing_probable ? 'text-rose-400' : 'text-emerald-400'}">
+              ${data.is_smishing_probable ? 'Probable Smishing Detectado' : 'Mensaje de Bajo Riesgo'} (Urgencia: ${data.urgency_score}/100)
+            </span>
+          </div>
+          <div><span class="text-slate-400">Disparadores detectados:</span> <span class="text-amber-400">${data.matched_triggers.join(', ') || 'Ninguno'}</span></div>
+          <div><span class="text-slate-400">URLs en el mensaje:</span> <span class="text-cyan-400">${data.extracted_urls.join(', ') || 'Sin enlaces'}</span></div>
+        `;
+      } catch (err) {
+        resDiv.innerHTML = `<div class="text-rose-400"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend en ${API_BASE}</div>`;
+      }
+    }
+
+    async function analyzeQR() {
+      const url = document.getElementById('qr-url').value;
+      const resDiv = document.getElementById('qr-results');
+      if (!url.trim()) {
+        alert('Ingresá una URL extraída de un QR.');
+        return;
+      }
+
+      resDiv.classList.remove('hidden');
+      resDiv.innerHTML = '<div class="text-amber-400 font-mono animate-pulse"><i class="fa-solid fa-spinner fa-spin"></i> Trazando saltos HTTP e inspección de IP...</div>';
+
+      try {
+        const response = await fetch(`${API_BASE}/api/analyze/url`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: url })
+        });
+        const data = await response.json();
+
+        resDiv.innerHTML = `
+          <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 mb-2">
+            <div class="text-cyan-400 font-bold">Host: ${data.hostname}</div>
+            <div class="text-slate-400">IP Resuelta: <span class="text-emerald-400">${data.resolved_ip}</span></div>
+            <div class="text-slate-400">Código HTTP Final: <span class="text-white">${data.status_code || 'Error'}</span></div>
+            <div class="text-slate-400">Total Redirecciones: <span class="text-amber-400">${data.total_redirects}</span></div>
+          </div>
+          <div class="text-slate-400">Destino final: <span class="text-cyan-300 break-all">${data.final_url}</span></div>
+        `;
+      } catch (err) {
+        resDiv.innerHTML = `<div class="text-rose-400"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend en ${API_BASE}</div>`;
+      }
+    }
+  </script>
+</body>
+</html>
