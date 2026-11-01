@@ -5,6 +5,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from backend.services.analyzer import ForensicAnalyzer
+from backend.services.db import init_db, save_incident, get_recent_incidents, clear_all_incidents
+
+# Inicializar tabla SQLite al iniciar el servicio
+init_db()
 
 app = FastAPI(
     title="Anzuelo · Validador OSINT de Phishing",
@@ -12,7 +16,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,7 +24,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Modelos de solicitud
 class EmailPayload(BaseModel):
     raw_headers: str
 
@@ -31,7 +33,6 @@ class SMSPayload(BaseModel):
 class URLPayload(BaseModel):
     url: str
 
-# Endpoints de API
 @app.get("/api/health")
 def health():
     return {
@@ -44,26 +45,69 @@ def health():
 def analyze_email(payload: EmailPayload):
     if not payload.raw_headers.strip():
         raise HTTPException(status_code=400, detail="Cabeceras vacías.")
-    return ForensicAnalyzer.analyze_email_headers(payload.raw_headers)
+    res = ForensicAnalyzer.analyze_email_headers(payload.raw_headers)
+    save_incident(
+        vector="Email",
+        target=f"From: {res.get('from', 'Desconocido')} | Subject: {res.get('subject', 'Sin asunto')}",
+        verdict=res.get("verdict", "Evaluado"),
+        risk_score=res.get("risk_score", 0),
+        details=res
+    )
+    return res
 
 @app.post("/api/analyze/sms")
 def analyze_sms(payload: SMSPayload):
     if not payload.message.strip():
         raise HTTPException(status_code=400, detail="Mensaje vacío.")
-    return ForensicAnalyzer.analyze_sms(payload.message)
+    res = ForensicAnalyzer.analyze_sms(payload.message)
+    save_incident(
+        vector="Smishing",
+        target=payload.message[:120],
+        verdict="Probable Smishing" if res.get("is_smishing_probable") else "Bajo Riesgo",
+        risk_score=res.get("urgency_score", 0),
+        details=res
+    )
+    return res
 
 @app.post("/api/analyze/url")
 def analyze_url(payload: URLPayload):
     if not payload.url.strip():
         raise HTTPException(status_code=400, detail="URL vacía.")
-    return ForensicAnalyzer.analyze_url_chain(payload.url)
+    res = ForensicAnalyzer.analyze_url_chain(payload.url)
+    save_incident(
+        vector="URL / Redirección",
+        target=payload.url,
+        verdict=f"Resuelto ({res.get('status_code', 'ERR')}) - {res.get('total_redirects', 0)} saltos",
+        risk_score=50 if res.get("total_redirects", 0) > 1 else 10,
+        details=res
+    )
+    return res
 
 @app.post("/api/analyze/qr-image")
 async def analyze_qr_image(file: UploadFile = File(...)):
     contents = await file.read()
     if not contents:
         return {"success": False, "error": "El archivo subido está vacío."}
-    return ForensicAnalyzer.decode_and_analyze_qr_image(contents)
+    res = ForensicAnalyzer.decode_and_analyze_qr_image(contents)
+    if res.get("success"):
+        save_incident(
+            vector="QR / Quishing",
+            target=res.get("payload", "")[:120],
+            verdict=f"Tipo: {res.get('type')}",
+            risk_score=75 if res.get("is_url") else 10,
+            details=res
+        )
+    return res
+
+# Endpoints de Historial SQLite
+@app.get("/api/history")
+def get_history():
+    return get_recent_incidents(limit=50)
+
+@app.delete("/api/history")
+def clear_history():
+    success = clear_all_incidents()
+    return {"success": success}
 
 # Servir Frontend Unificado
 BASE_DIR = Path(__file__).resolve().parent.parent

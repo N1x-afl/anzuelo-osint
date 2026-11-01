@@ -70,7 +70,7 @@
 
       <div class="relative z-10 text-xs text-slate-500 flex justify-between items-center font-mono">
         <span>Arch / CachyOS Environment</span>
-        <span>Unified Single Server</span>
+        <span>Unified SQLite Storage</span>
       </div>
     </div>
 
@@ -143,10 +143,15 @@
     </header>
 
     <main class="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
-      <div class="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
-        <button onclick="switchTab('tab-email')" id="btn-tab-email" class="px-4 py-2 rounded-md bg-cyan-950 border border-cyan-800 text-cyan-300 text-xs font-mono transition">Análisis Email</button>
-        <button onclick="switchTab('tab-sms')" id="btn-tab-sms" class="px-4 py-2 rounded-md bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono transition">SMS / Smishing</button>
-        <button onclick="switchTab('tab-qr')" id="btn-tab-qr" class="px-4 py-2 rounded-md bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono transition">QR / Quishing</button>
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+        <div class="flex flex-wrap gap-2">
+          <button onclick="switchTab('tab-email')" id="btn-tab-email" class="px-4 py-2 rounded-md bg-cyan-950 border border-cyan-800 text-cyan-300 text-xs font-mono transition">Análisis Email</button>
+          <button onclick="switchTab('tab-sms')" id="btn-tab-sms" class="px-4 py-2 rounded-md bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono transition">SMS / Smishing</button>
+          <button onclick="switchTab('tab-qr')" id="btn-tab-qr" class="px-4 py-2 rounded-md bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono transition">QR / Quishing</button>
+          <button onclick="switchTab('tab-history')" id="btn-tab-history" class="px-4 py-2 rounded-md bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono transition flex items-center gap-1.5">
+            <i class="fa-solid fa-database text-cyan-400"></i> Historial SQLite
+          </button>
+        </div>
       </div>
 
       <!-- Panel Email -->
@@ -212,6 +217,47 @@
         </div>
         <div id="qr-results" class="hidden bg-slate-900/40 border border-slate-800 p-4 rounded-xl text-xs font-mono space-y-2"></div>
       </section>
+
+      <!-- Panel Historial SQLite -->
+      <section id="tab-history" class="hidden space-y-4">
+        <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-xl">
+          <div class="flex justify-between items-center mb-4">
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-clock-rotate-left text-cyan-400"></i> Registro Local de Incidentes
+              </h3>
+              <p class="text-slate-400 text-xs">Persistencia local en base de datos SQLite integrada.</p>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="loadHistory()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 rounded text-xs font-mono transition flex items-center gap-1">
+                <i class="fa-solid fa-arrows-rotate"></i> Actualizar
+              </button>
+              <button onclick="clearHistory()" class="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/50 text-rose-400 border border-rose-800/50 rounded text-xs font-mono transition flex items-center gap-1">
+                <i class="fa-solid fa-trash-can"></i> Limpiar BD
+              </button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left font-mono text-xs">
+              <thead class="bg-slate-950 text-slate-400 border-b border-slate-800 uppercase text-[10px]">
+                <tr>
+                  <th class="p-3">ID / Hora</th>
+                  <th class="p-3">Vector</th>
+                  <th class="p-3">Objetivo / Muestra</th>
+                  <th class="p-3">Veredicto Forense</th>
+                  <th class="p-3">Puntaje</th>
+                </tr>
+              </thead>
+              <tbody id="history-table-body" class="divide-y divide-slate-800/60 text-slate-300">
+                <tr>
+                  <td colspan="5" class="p-4 text-center text-slate-500">Cargando historial de incidentes...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -237,7 +283,6 @@
   </div>
 
   <script>
-    // En arquitectura unificada se usan rutas relativas automáticas
     const API_BASE = '';
     let currentRole = 'Administrador';
 
@@ -272,12 +317,16 @@
     }
 
     function switchTab(tabId) {
-      ['tab-email', 'tab-sms', 'tab-qr'].forEach(id => {
+      ['tab-email', 'tab-sms', 'tab-qr', 'tab-history'].forEach(id => {
         document.getElementById(id).classList.add('hidden');
         document.getElementById('btn-' + id).className = 'px-4 py-2 rounded-md bg-slate-900 border border-slate-800 text-slate-400 text-xs font-mono transition';
       });
       document.getElementById(tabId).classList.remove('hidden');
       document.getElementById('btn-' + tabId).className = 'px-4 py-2 rounded-md bg-cyan-950 border border-cyan-800 text-cyan-300 text-xs font-mono transition';
+
+      if (tabId === 'tab-history') {
+        loadHistory();
+      }
     }
 
     function openPassModal() { document.getElementById('modal-pass').classList.remove('hidden'); }
@@ -442,6 +491,52 @@
         `;
       } catch (err) {
         resDiv.innerHTML = `<div class="p-3 rounded-lg bg-rose-950/40 border border-rose-800/50 text-rose-400 font-mono"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend.</div>`;
+      }
+    }
+
+    async function loadHistory() {
+      const tbody = document.getElementById('history-table-body');
+      tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-cyan-400"><i class="fa-solid fa-spinner fa-spin"></i> Leyendo base de datos SQLite...</td></tr>';
+
+      try {
+        const response = await fetch(`${API_BASE}/api/history`);
+        const items = await response.json();
+
+        if (!items.length) {
+          tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-500">No hay incidentes registrados en la base de datos aún.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = items.map(item => {
+          const isHigh = item.risk_score >= 60;
+          return `
+            <tr class="hover:bg-slate-900/40 transition">
+              <td class="p-3 text-slate-400 text-[11px] whitespace-nowrap">
+                <span class="text-slate-500">#${item.id}</span> · ${item.timestamp}
+              </td>
+              <td class="p-3 font-bold text-cyan-400">${item.vector}</td>
+              <td class="p-3 max-w-xs truncate text-slate-300" title="${item.target}">${item.target}</td>
+              <td class="p-3">
+                <span class="px-2 py-0.5 rounded text-[11px] ${isHigh ? 'bg-rose-950/60 border border-rose-800/50 text-rose-300' : 'bg-emerald-950/60 border border-emerald-800/50 text-emerald-300'}">
+                  ${item.verdict}
+                </span>
+              </td>
+              <td class="p-3 font-mono ${isHigh ? 'text-rose-400 font-bold' : 'text-slate-400'}">${item.risk_score}/100</td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-rose-400">Error al leer la base de datos.</td></tr>';
+      }
+    }
+
+    async function clearHistory() {
+      if (!confirm('¿Estás seguro de que querés vaciar todos los registros del historial?')) return;
+      try {
+        await fetch(`${API_BASE}/api/history`, { method: 'DELETE' });
+        loadHistory();
+      } catch (err) {
+        alert('Error al intentar vaciar la base de datos.');
       }
     }
   </script>
