@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from backend.services.analyzer import ForensicAnalyzer
@@ -9,7 +9,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Habilitar CORS para consultas locales
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,7 +17,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Modelos de solicitud
 class EmailPayload(BaseModel):
     raw_headers: str
 
@@ -53,3 +51,15 @@ def analyze_url(payload: URLPayload):
     if not payload.url.strip():
         raise HTTPException(status_code=400, detail="URL vacía.")
     return ForensicAnalyzer.analyze_url_chain(payload.url)
+
+@app.post("/api/analyze/qr-image")
+async def analyze_qr_image(file: UploadFile = File(...)):
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="Archivo vacío.")
+    
+    result = ForensicAnalyzer.decode_and_analyze_qr_image(contents)
+    if not result.get("success"):
+        raise HTTPException(status_code=422, detail=result.get("error"))
+    
+    return result

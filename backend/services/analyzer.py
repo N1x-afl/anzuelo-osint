@@ -1,8 +1,11 @@
+import io
 import re
 import socket
 import email
 from email import policy
 from urllib.parse import urlparse
+from PIL import Image
+from pyzbar.pyzbar import decode as decode_qr
 import dns.resolver
 import requests
 
@@ -18,13 +21,11 @@ class ForensicAnalyzer:
         date_header = msg.get("Date", "")
         received_hops = msg.get_all("Received", [])
 
-        # Extraer dominio del remitente
         domain = ""
         match_email = re.search(r"@([\w.-]+)", from_header)
         if match_email:
             domain = match_email.group(1).strip(">")
 
-        # Chequeo DNS real de SPF y DMARC
         spf_status = "NOT_FOUND"
         dmarc_status = "NOT_FOUND"
         mx_records = []
@@ -34,7 +35,6 @@ class ForensicAnalyzer:
             resolver.timeout = 3.0
             resolver.lifetime = 3.0
 
-            # SPF
             try:
                 txt_answers = resolver.resolve(domain, "TXT")
                 for rdata in txt_answers:
@@ -45,7 +45,6 @@ class ForensicAnalyzer:
             except Exception:
                 spf_status = "FAIL_OR_NONE"
 
-            # DMARC
             try:
                 dmarc_answers = resolver.resolve(f"_dmarc.{domain}", "TXT")
                 for rdata in dmarc_answers:
@@ -56,14 +55,12 @@ class ForensicAnalyzer:
             except Exception:
                 dmarc_status = "FAIL_OR_NONE"
 
-            # MX
             try:
                 mx_answers = resolver.resolve(domain, "MX")
                 mx_records = [str(r.exchange).rstrip(".") for r in mx_answers]
             except Exception:
                 pass
 
-        # Veredicto de riesgo
         risk_score = 0
         if "FAIL" in spf_status or spf_status == "NOT_FOUND":
             risk_score += 40
@@ -95,9 +92,7 @@ class ForensicAnalyzer:
         text_lower = text.lower()
         matched_triggers = [t for t in triggers if t in text_lower]
 
-        # Extraer enlaces
         urls = re.findall(r'(https?://[^\s]+)', text)
-
         urgency_score = min(len(matched_triggers) * 25, 100)
 
         return {
@@ -116,14 +111,12 @@ class ForensicAnalyzer:
         parsed = urlparse(target_url)
         hostname = parsed.hostname or ""
 
-        # Resolución IP
         resolved_ip = ""
         try:
             resolved_ip = socket.gethostbyname(hostname)
         except Exception:
             resolved_ip = "No resoluble"
 
-        # Seguimiento de saltos HTTP
         hops = []
         final_url = target_url
         status_code = None
@@ -151,3 +144,35 @@ class ForensicAnalyzer:
             "total_redirects": len(hops),
             "hops_chain": hops
         }
+
+    @staticmethod
+    def decode_and_analyze_qr_image(file_bytes: bytes) -> dict:
+        try:
+            image = Image.open(io.BytesIO(file_bytes))
+            decoded_objects = decode_qr(image)
+
+            if not decoded_objects:
+                return {
+                    "success": False,
+                    "error": "No se detectó ningún código QR legible en la imagen proporcionada."
+                }
+
+            payload = decoded_objects[0].data.decode("utf-8", errors="replace")
+            qr_type = decoded_objects[0].type
+
+            url_analysis = None
+            if payload.startswith(("http://", "https://")):
+                url_analysis = ForensicAnalyzer.analyze_url_chain(payload)
+
+            return {
+                "success": True,
+                "type": qr_type,
+                "payload": payload,
+                "is_url": url_analysis is not None,
+                "url_analysis": url_analysis
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Fallo al procesar la imagen: {str(e)}"
+            }

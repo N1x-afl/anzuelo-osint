@@ -183,14 +183,38 @@
 
       <!-- Panel QR -->
       <section id="tab-qr" class="hidden space-y-4">
-        <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-xl">
-          <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-2">
-            <i class="fa-solid fa-qrcode text-amber-400"></i> Desempaquetador de QR Payload
+        <div class="bg-slate-900/60 border border-slate-800 p-5 rounded-xl space-y-4">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-qrcode text-amber-400"></i> Desempaquetador de QR Payload & Quishing
           </h3>
-          <input id="qr-url" type="text" placeholder="https://dominio-sospechoso.com/login" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-slate-300 focus:outline-none focus:border-amber-500">
-          <button onclick="analyzeQR()" class="mt-3 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded-lg text-xs transition">
-            Trazar Saltos HTTP e Inspección
-          </button>
+
+          <!-- Subida de Imagen -->
+          <div>
+            <label class="block text-[11px] font-mono text-slate-400 mb-2 uppercase">Opción 1: Subir captura / archivo de imagen QR</label>
+            <div class="flex items-center gap-3">
+              <input id="qr-file-input" type="file" accept="image/*" class="text-xs font-mono text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-amber-950 file:text-amber-400 hover:file:bg-amber-900 cursor-pointer">
+              <button onclick="analyzeQRFile()" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold rounded-lg text-xs transition">
+                Decodificar Imagen
+              </button>
+            </div>
+          </div>
+
+          <div class="relative flex py-1 items-center">
+            <div class="flex-grow border-t border-slate-800"></div>
+            <span class="flex-shrink mx-4 text-slate-600 text-[10px] font-mono uppercase">O ingresar URL extraída</span>
+            <div class="flex-grow border-t border-slate-800"></div>
+          </div>
+
+          <!-- URL Manual -->
+          <div>
+            <label class="block text-[11px] font-mono text-slate-400 mb-2 uppercase">Opción 2: Inspección directa de enlace</label>
+            <div class="flex gap-2">
+              <input id="qr-url" type="text" placeholder="https://dominio-sospechoso.com/login" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-slate-300 focus:outline-none focus:border-amber-500">
+              <button onclick="analyzeQR()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/30 font-bold rounded-lg text-xs transition whitespace-nowrap">
+                Trazar Saltos
+              </button>
+            </div>
+          </div>
         </div>
         <div id="qr-results" class="hidden bg-slate-900/40 border border-slate-800 p-4 rounded-xl text-xs font-mono space-y-2"></div>
       </section>
@@ -365,6 +389,57 @@
             <div class="text-slate-400">Total Redirecciones: <span class="text-amber-400">${data.total_redirects}</span></div>
           </div>
           <div class="text-slate-400">Destino final: <span class="text-cyan-300 break-all">${data.final_url}</span></div>
+        `;
+      } catch (err) {
+        resDiv.innerHTML = `<div class="text-rose-400"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend en ${API_BASE}</div>`;
+      }
+    }
+
+    async function analyzeQRFile() {
+      const fileInput = document.getElementById('qr-file-input');
+      const resDiv = document.getElementById('qr-results');
+      if (!fileInput.files.length) {
+        alert('Por favor seleccioná una imagen con un código QR.');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+
+      resDiv.classList.remove('hidden');
+      resDiv.innerHTML = '<div class="text-amber-400 font-mono animate-pulse"><i class="fa-solid fa-spinner fa-spin"></i> Decodificando matriz QR y analizando destino...</div>';
+
+      try {
+        const response = await fetch(`${API_BASE}/api/analyze/qr-image`, {
+          method: 'POST',
+          body: formData
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          resDiv.innerHTML = `<div class="text-rose-400"><i class="fa-solid fa-triangle-exclamation"></i> ${data.detail || 'Error procesando el código QR.'}</div>`;
+          return;
+        }
+
+        let urlBlock = '';
+        if (data.url_analysis) {
+          const u = data.url_analysis;
+          urlBlock = `
+            <div class="p-3 mt-2 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+              <div class="text-cyan-400 font-bold">Host: ${u.hostname}</div>
+              <div class="text-slate-400">IP Destino: <span class="text-emerald-400">${u.resolved_ip}</span></div>
+              <div class="text-slate-400">Saltos HTTP: <span class="text-amber-400">${u.total_redirects}</span> | Código final: <span class="text-white">${u.status_code || 'N/A'}</span></div>
+              <div class="text-slate-400">Destino final: <span class="text-cyan-300 break-all">${u.final_url}</span></div>
+            </div>
+          `;
+        }
+
+        resDiv.innerHTML = `
+          <div class="p-3 rounded-lg bg-amber-950/30 border border-amber-800/40 mb-2">
+            <span class="text-xs uppercase font-bold text-amber-400">Contenido QR Decodificado:</span>
+            <div class="text-white break-all mt-1 font-mono text-sm">${data.payload}</div>
+          </div>
+          ${urlBlock}
         `;
       } catch (err) {
         resDiv.innerHTML = `<div class="text-rose-400"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend en ${API_BASE}</div>`;
