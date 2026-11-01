@@ -123,7 +123,7 @@ class ForensicAnalyzer:
 
         try:
             session = requests.Session()
-            res = session.get(target_url, allow_redirects=True, timeout=5, headers={"User-Agent": "Mozilla/5.0 (Anzuelo-OSINT-Triage)"})
+            res = session.get(target_url, allow_redirects=True, timeout=4, headers={"User-Agent": "Mozilla/5.0 (Anzuelo-OSINT-Triage)"})
             for resp in res.history:
                 hops.append({
                     "url": resp.url,
@@ -149,6 +149,10 @@ class ForensicAnalyzer:
     def decode_and_analyze_qr_image(file_bytes: bytes) -> dict:
         try:
             image = Image.open(io.BytesIO(file_bytes))
+            
+            if image.mode not in ("RGB", "L"):
+                image = image.convert("RGB")
+
             decoded_objects = decode_qr(image)
 
             if not decoded_objects:
@@ -161,8 +165,8 @@ class ForensicAnalyzer:
             qr_type = decoded_objects[0].type
 
             url_analysis = None
-            if payload.startswith(("http://", "https://")):
-                url_analysis = ForensicAnalyzer.analyze_url_chain(payload)
+            if payload.strip().startswith(("http://", "https://")):
+                url_analysis = ForensicAnalyzer.analyze_url_chain(payload.strip())
 
             return {
                 "success": True,

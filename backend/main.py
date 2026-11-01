@@ -1,5 +1,8 @@
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from backend.services.analyzer import ForensicAnalyzer
 
@@ -9,6 +12,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,6 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Modelos de solicitud
 class EmailPayload(BaseModel):
     raw_headers: str
 
@@ -26,8 +31,9 @@ class SMSPayload(BaseModel):
 class URLPayload(BaseModel):
     url: str
 
-@app.get("/")
-def root():
+# Endpoints de API
+@app.get("/api/health")
+def health():
     return {
         "status": "online",
         "service": "Anzuelo OSINT Core Engine",
@@ -56,10 +62,16 @@ def analyze_url(payload: URLPayload):
 async def analyze_qr_image(file: UploadFile = File(...)):
     contents = await file.read()
     if not contents:
-        raise HTTPException(status_code=400, detail="Archivo vacío.")
-    
-    result = ForensicAnalyzer.decode_and_analyze_qr_image(contents)
-    if not result.get("success"):
-        raise HTTPException(status_code=422, detail=result.get("error"))
-    
-    return result
+        return {"success": False, "error": "El archivo subido está vacío."}
+    return ForensicAnalyzer.decode_and_analyze_qr_image(contents)
+
+# Servir Frontend Unificado
+BASE_DIR = Path(__file__).resolve().parent.parent
+FRONTEND_DIR = BASE_DIR / "frontend"
+
+if FRONTEND_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+
+    @app.get("/")
+    async def serve_index():
+        return FileResponse(str(FRONTEND_DIR / "index.html"))

@@ -36,7 +36,6 @@
       </div>
 
       <div class="relative z-10 my-auto py-10 flex flex-col items-center text-center">
-        <!-- Contenedor Logo Anzuelo -->
         <div class="relative mb-8 group">
           <div class="absolute -inset-2 bg-gradient-to-r from-cyan-500 to-emerald-500 rounded-2xl blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
           <div class="relative w-36 h-36 rounded-2xl bg-slate-900 border border-cyan-500/40 flex items-center justify-center p-6 shadow-2xl">
@@ -56,7 +55,6 @@
           Plataforma táctica de validación forense y respuesta preliminar contra vectores de ingeniería social.
         </p>
 
-        <!-- Vectors Grid -->
         <div class="grid grid-cols-3 gap-3 mt-8 w-full max-w-sm text-xs font-mono">
           <div class="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800 text-slate-300">
             <i class="fa-solid fa-envelope text-cyan-400 mb-1 block text-base"></i> Email
@@ -72,7 +70,7 @@
 
       <div class="relative z-10 text-xs text-slate-500 flex justify-between items-center font-mono">
         <span>Arch / CachyOS Environment</span>
-        <span>Local Core Engine</span>
+        <span>Unified Single Server</span>
       </div>
     </div>
 
@@ -84,7 +82,6 @@
           <p class="text-slate-400 text-sm mt-1">Ingresá tus credenciales o seleccioná un perfil para continuar.</p>
         </div>
 
-        <!-- Presets -->
         <div class="bg-slate-900/50 p-3 rounded-lg border border-slate-800">
           <label class="text-[11px] font-mono uppercase tracking-wider text-slate-400 block mb-2">Roles preconfigurados:</label>
           <div class="grid grid-cols-3 gap-2">
@@ -94,7 +91,6 @@
           </div>
         </div>
 
-        <!-- Formulario -->
         <form onsubmit="handleLogin(event)" class="space-y-4">
           <div>
             <label class="block text-xs font-mono uppercase tracking-wider text-slate-300 mb-1.5">Identificador / Usuario</label>
@@ -188,7 +184,6 @@
             <i class="fa-solid fa-qrcode text-amber-400"></i> Desempaquetador de QR Payload & Quishing
           </h3>
 
-          <!-- Subida de Imagen -->
           <div>
             <label class="block text-[11px] font-mono text-slate-400 mb-2 uppercase">Opción 1: Subir captura / archivo de imagen QR</label>
             <div class="flex items-center gap-3">
@@ -205,7 +200,6 @@
             <div class="flex-grow border-t border-slate-800"></div>
           </div>
 
-          <!-- URL Manual -->
           <div>
             <label class="block text-[11px] font-mono text-slate-400 mb-2 uppercase">Opción 2: Inspección directa de enlace</label>
             <div class="flex gap-2">
@@ -243,7 +237,8 @@
   </div>
 
   <script>
-    const API_BASE = 'http://localhost:8001';
+    // En arquitectura unificada se usan rutas relativas automáticas
+    const API_BASE = '';
     let currentRole = 'Administrador';
 
     function setCredentials(user, role) {
@@ -320,12 +315,12 @@
           <div><span class="text-slate-400">Remitente:</span> <span class="text-white">${data.from}</span></div>
           <div><span class="text-slate-400">Dominio extraído:</span> <span class="text-cyan-400">${data.domain || 'N/A'}</span></div>
           <div><span class="text-slate-400">Saltos SMTP:</span> <span class="text-white">${data.hops_count}</span></div>
-          <div><span class="text-slate-400">SPF TXT:</span> <span class="${data.spf.includes('DETECTED') ? 'text-emerald-400' : 'text-rose-400'}">${data.spf}</span></div>
-          <div><span class="text-slate-400">DMARC TXT:</span> <span class="${data.dmarc.includes('DETECTED') ? 'text-emerald-400' : 'text-rose-400'}">${data.dmarc}</span></div>
-          <div><span class="text-slate-400">Servidores MX:</span> <span class="text-slate-300">${data.mx_records.join(', ') || 'Sin registros MX'}</span></div>
+          <div><span class="text-slate-400">SPF TXT:</span> <span class="${data.spf && data.spf.includes('DETECTED') ? 'text-emerald-400' : 'text-rose-400'}">${data.spf}</span></div>
+          <div><span class="text-slate-400">DMARC TXT:</span> <span class="${data.dmarc && data.dmarc.includes('DETECTED') ? 'text-emerald-400' : 'text-rose-400'}">${data.dmarc}</span></div>
+          <div><span class="text-slate-400">Servidores MX:</span> <span class="text-slate-300">${data.mx_records ? data.mx_records.join(', ') : 'Sin registros MX'}</span></div>
         `;
       } catch (err) {
-        resDiv.innerHTML = `<div class="text-rose-400"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend en ${API_BASE}</div>`;
+        resDiv.innerHTML = `<div class="text-rose-400 font-mono"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend.</div>`;
       }
     }
 
@@ -354,11 +349,11 @@
               ${data.is_smishing_probable ? 'Probable Smishing Detectado' : 'Mensaje de Bajo Riesgo'} (Urgencia: ${data.urgency_score}/100)
             </span>
           </div>
-          <div><span class="text-slate-400">Disparadores detectados:</span> <span class="text-amber-400">${data.matched_triggers.join(', ') || 'Ninguno'}</span></div>
-          <div><span class="text-slate-400">URLs en el mensaje:</span> <span class="text-cyan-400">${data.extracted_urls.join(', ') || 'Sin enlaces'}</span></div>
+          <div><span class="text-slate-400">Disparadores detectados:</span> <span class="text-amber-400">${data.matched_triggers ? data.matched_triggers.join(', ') : 'Ninguno'}</span></div>
+          <div><span class="text-slate-400">URLs en el mensaje:</span> <span class="text-cyan-400">${data.extracted_urls ? data.extracted_urls.join(', ') : 'Sin enlaces'}</span></div>
         `;
       } catch (err) {
-        resDiv.innerHTML = `<div class="text-rose-400"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend en ${API_BASE}</div>`;
+        resDiv.innerHTML = `<div class="text-rose-400 font-mono"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend.</div>`;
       }
     }
 
@@ -382,16 +377,16 @@
         const data = await response.json();
 
         resDiv.innerHTML = `
-          <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 mb-2">
+          <div class="p-3 rounded-lg bg-slate-950 border border-slate-800 mb-2 font-mono text-xs">
             <div class="text-cyan-400 font-bold">Host: ${data.hostname}</div>
             <div class="text-slate-400">IP Resuelta: <span class="text-emerald-400">${data.resolved_ip}</span></div>
             <div class="text-slate-400">Código HTTP Final: <span class="text-white">${data.status_code || 'Error'}</span></div>
             <div class="text-slate-400">Total Redirecciones: <span class="text-amber-400">${data.total_redirects}</span></div>
           </div>
-          <div class="text-slate-400">Destino final: <span class="text-cyan-300 break-all">${data.final_url}</span></div>
+          <div class="text-slate-400 text-xs font-mono">Destino final: <span class="text-cyan-300 break-all">${data.final_url}</span></div>
         `;
       } catch (err) {
-        resDiv.innerHTML = `<div class="text-rose-400"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend en ${API_BASE}</div>`;
+        resDiv.innerHTML = `<div class="text-rose-400 font-mono"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend.</div>`;
       }
     }
 
@@ -416,8 +411,12 @@
         });
         const data = await response.json();
 
-        if (!response.ok) {
-          resDiv.innerHTML = `<div class="text-rose-400"><i class="fa-solid fa-triangle-exclamation"></i> ${data.detail || 'Error procesando el código QR.'}</div>`;
+        if (!data.success) {
+          resDiv.innerHTML = `
+            <div class="p-3 rounded-lg bg-rose-950/40 border border-rose-800/50 text-rose-400 font-mono">
+              <i class="fa-solid fa-triangle-exclamation"></i> ${data.error || 'Error al procesar la imagen.'}
+            </div>
+          `;
           return;
         }
 
@@ -425,7 +424,7 @@
         if (data.url_analysis) {
           const u = data.url_analysis;
           urlBlock = `
-            <div class="p-3 mt-2 rounded-lg bg-slate-950 border border-slate-800 space-y-1">
+            <div class="p-3 mt-2 rounded-lg bg-slate-950 border border-slate-800 space-y-1 font-mono text-xs">
               <div class="text-cyan-400 font-bold">Host: ${u.hostname}</div>
               <div class="text-slate-400">IP Destino: <span class="text-emerald-400">${u.resolved_ip}</span></div>
               <div class="text-slate-400">Saltos HTTP: <span class="text-amber-400">${u.total_redirects}</span> | Código final: <span class="text-white">${u.status_code || 'N/A'}</span></div>
@@ -435,14 +434,14 @@
         }
 
         resDiv.innerHTML = `
-          <div class="p-3 rounded-lg bg-amber-950/30 border border-amber-800/40 mb-2">
-            <span class="text-xs uppercase font-bold text-amber-400">Contenido QR Decodificado:</span>
-            <div class="text-white break-all mt-1 font-mono text-sm">${data.payload}</div>
+          <div class="p-3 rounded-lg bg-amber-950/30 border border-amber-800/40 mb-2 font-mono">
+            <span class="text-xs uppercase font-bold text-amber-400">Contenido QR Detectado (${data.type}):</span>
+            <div class="text-white break-all mt-1 font-mono text-sm bg-slate-950 p-2.5 rounded border border-slate-800">${data.payload}</div>
           </div>
           ${urlBlock}
         `;
       } catch (err) {
-        resDiv.innerHTML = `<div class="text-rose-400"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend en ${API_BASE}</div>`;
+        resDiv.innerHTML = `<div class="p-3 rounded-lg bg-rose-950/40 border border-rose-800/50 text-rose-400 font-mono"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend.</div>`;
       }
     }
   </script>
