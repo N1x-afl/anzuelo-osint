@@ -6,3 +6,8 @@ __pycache__/
 .DS_Store
 .vscode/
 .idea/
+
+# Base de datos local de incidentes (contiene datos de triage reales)
+anzuelo.db
+*.db
+*.sqlite3
