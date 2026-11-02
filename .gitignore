@@ -6,6 +6,7 @@ __pycache__/
 .DS_Store
 .vscode/
 .idea/
+.pytest_cache/
 
 # Base de datos local de incidentes (contiene datos de triage reales)
 anzuelo.db

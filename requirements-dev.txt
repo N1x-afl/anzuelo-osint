@@ -1,0 +1,7 @@
+# Dependencias adicionales solo para correr la suite de tests (no necesarias
+# para correr Anzuelo en sí — ver requirements.txt para eso).
+-r requirements.txt
+
+pytest>=8.0.0
+httpx>=0.27.0   # requerido por fastapi.testclient.TestClient
+qrcode>=7.4.2   # genera un QR real en memoria para el test de decodificación end-to-end

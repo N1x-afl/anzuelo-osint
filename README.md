@@ -5,6 +5,7 @@
 ![SQLite](https://img.shields.io/badge/Storage-SQLite3-003B57?logo=sqlite&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Status](https://img.shields.io/badge/Status-Homelab%20%2F%20Educational-orange)
+[![Tests](https://github.com/N1x-afl/anzuelo-osint/actions/workflows/tests.yml/badge.svg)](https://github.com/N1x-afl/anzuelo-osint/actions/workflows/tests.yml)
 
 Plataforma unificada de respuesta preliminar y análisis forense rápido frente a vectores de ingeniería social (Phishing de correo, Smishing por SMS y Quishing vía códigos QR), orientada a analistas de seguridad, equipos de respuesta a incidentes (CSIRT/SOC) y entornos homelab.
 
@@ -20,6 +21,7 @@ Plataforma unificada de respuesta preliminar y análisis forense rápido frente 
 - **Exportación de Evidencia (CSV / PDF forense):** Historial completo a CSV, informe PDF resumen de todos los incidentes, o informe PDF individual por incidente con hash SHA-256 de integridad (cadena de custodia) — ver sección dedicada más abajo.
 - **Autenticación Real + Rate Limiting:** Login respaldado por backend (bcrypt + JWT), roles (admin/analista/viewer) y límite de intentos para frenar fuerza bruta — ver sección dedicada más abajo.
 - **Dockerizado:** `Dockerfile` + `docker-compose.yml` listos para levantar todo con un comando, sin instalar Python/zbar en el host.
+- **Suite de Tests + CI:** 63 tests automatizados (pytest) cubriendo heurísticas, Threat Intelligence, auth y export, corridos en cada push/PR vía GitHub Actions — ver sección dedicada más abajo.
 - **Arquitectura de Proceso Único:** Backend en FastAPI y Frontend (HTML/Tailwind CSS) servidos bajo el mismo socket y proceso, accesible localmente o mediante la IP física de la LAN.
 - **Interfaz táctica tipo SOC:** fondo de red animado (nodos conectados sobre Canvas), barrido de radar, esquinas HUD en los paneles y estados de "escaneo" en los botones de acción.
 
@@ -189,6 +191,27 @@ Anzuelo está pensado para uso personal/homelab, no como servicio expuesto a int
 
 - **CORS está abierto a cualquier origen** (`allow_origins=["*"]`) en `backend/main.py`, pensado para desarrollo local y acceso LAN. Si lo exponés más allá de tu red de confianza, restringilo a los orígenes que realmente necesites.
 - **`anzuelo.db` queda en tu máquina y no se sube al repo** (está en `.gitignore`), ya que acumula el historial real de incidentes/correos/SMS que analices — y ahora también las claves (hasheadas) de los usuarios.
+
+---
+
+## 🧪 Tests
+
+La suite cubre heurísticas de análisis (email/SMS/URL/QR), las 4 integraciones de Threat Intelligence, autenticación/roles/rate limiting y la exportación de evidencia — 63 tests en total, corridos automáticamente en cada push/PR a `main` vía [GitHub Actions](.github/workflows/tests.yml).
+
+Todo lo que toca red externa (DNS, WHOIS, VirusTotal, AbuseIPDB, URLhaus) está mockeado, así que la suite corre rápido y determinística sin necesitar conectividad ni API keys reales.
+
+```bash
+pip install -r requirements-dev.txt
+pytest -v
+```
+
+| Archivo | Qué cubre |
+|---|---|
+| `tests/test_analyzer.py` | Heurísticas de email/SMS/URL/QR (`ForensicAnalyzer`), incluyendo cálculo de `risk_score` |
+| `tests/test_threat_intel.py` | VirusTotal, AbuseIPDB, URLhaus, WHOIS — degradación sin key, errores de red, matches positivos |
+| `tests/test_auth_service.py` | Hashing bcrypt, emisión/validación de JWT, tokens vencidos o adulterados |
+| `tests/test_report_export.py` | Generación de CSV/PDF, hash de integridad |
+| `tests/test_api.py` | Integración end-to-end vía `TestClient`: login, roles, rate limiting, y los flujos de análisis/historial/export completos |
 
 ---
 
