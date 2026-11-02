@@ -135,7 +135,29 @@ chmod +x run.sh
 ./run.sh
 ```
 
-Igual que con Docker, queda escuchando en `0.0.0.0:8001` — accesible desde `http://localhost:8001` y desde cualquier equipo de la misma LAN por la IP física del host. A diferencia de Docker, acá sí tenés que dejar la terminal abierta (o usar `tmux`/`screen`/un servicio `systemd` propio) para que seguir corriendo.
+Igual que con Docker, queda escuchando en `0.0.0.0:8001` — accesible desde `http://localhost:8001` y desde cualquier equipo de la misma LAN por la IP física del host. A diferencia de Docker, acá sí tenés que dejar la terminal abierta (o usar `tmux`/`screen`/un servicio `systemd` propio) para que siga corriendo.
+
+---
+
+## 🔐 Autenticación
+
+Desde esta versión, el login es **autenticación real del lado del backend**, no una puerta de entrada de frontend:
+
+- Claves guardadas con **bcrypt** (nunca en texto plano) en una tabla `users` dentro de `anzuelo.db`.
+- Sesión vía **JWT firmado** (`Authorization: Bearer <token>`), expira a las 8hs por defecto (`ANZUELO_JWT_EXPIRE_MINUTES` en `.env`).
+- Todos los endpoints de análisis, historial y export requieren sesión válida; vaciar el historial (`DELETE /api/history`) requiere además rol **admin**.
+- **Rate limiting** (vía `slowapi`) en login y cambio de clave: 5 intentos/minuto por IP, para frenar fuerza bruta. Los endpoints de análisis están limitados a 20 req/minuto.
+- Podés cambiar tu clave desde la UI (botón "Clave" en el header) una vez logueado.
+
+La tabla `users` se siembra automáticamente la primera vez que corre `init_db()`, con los mismos 3 perfiles demo que ya conocías — pero ahora son usuarios reales validados en el backend, no un hardcode del frontend:
+
+| Perfil | Usuario | Clave inicial |
+|---|---|---|
+| Admin | `admin` | `admin123` |
+| Analista OSINT | `analista` | `analista123` |
+| Visualizador | `viewer` | `viewer123` |
+
+**Recomendado si vas a usarlo más allá de pruebas locales:** cambiá estas 3 claves apenas lo levantes (botón "Clave"), y fijá un `ANZUELO_JWT_SECRET` propio en `.env` — si no lo configurás, se genera uno aleatorio en cada arranque del backend, lo que invalida todas las sesiones activas cada vez que reiniciás el proceso.
 
 ---
 
@@ -178,26 +200,6 @@ El hash de integridad se calcula sobre el JSON canónico del incidente tal como 
 Los tres se generan localmente con `reportlab` — sin llamadas a servicios externos. Disponibles desde la pestaña **Historial SQLite** (botones "Exportar CSV" / "Exportar PDF") y desde el inspector de detalle de cada incidente ("Exportar Informe PDF").
 
 ---
-
-## 🔐 Autenticación
-
-Desde esta versión, el login es **autenticación real del lado del backend**, no una puerta de entrada de frontend:
-
-- Claves guardadas con **bcrypt** (nunca en texto plano) en una tabla `users` dentro de `anzuelo.db`.
-- Sesión vía **JWT firmado** (`Authorization: Bearer <token>`), expira a las 8hs por defecto (`ANZUELO_JWT_EXPIRE_MINUTES` en `.env`).
-- Todos los endpoints de análisis, historial y export requieren sesión válida; vaciar el historial (`DELETE /api/history`) requiere además rol **admin**.
-- **Rate limiting** (vía `slowapi`) en login y cambio de clave: 5 intentos/minuto por IP, para frenar fuerza bruta. Los endpoints de análisis están limitados a 20 req/minuto.
-- Podés cambiar tu clave desde la UI (botón "Clave" en el header) una vez logueado.
-
-La tabla `users` se siembra automáticamente la primera vez que corre `init_db()`, con los mismos 3 perfiles demo que ya conocías — pero ahora son usuarios reales validados en el backend, no un hardcode del frontend:
-
-| Perfil | Usuario | Clave inicial |
-|---|---|---|
-| Admin | `admin` | `admin123` |
-| Analista OSINT | `analista` | `analista123` |
-| Visualizador | `viewer` | `viewer123` |
-
-**Recomendado si vas a usarlo más allá de pruebas locales:** cambiá estas 3 claves apenas lo levantes (botón "Clave"), y fijá un `ANZUELO_JWT_SECRET` propio en `.env` — si no lo configurás, se genera uno aleatorio en cada arranque del backend, lo que invalida todas las sesiones activas cada vez que reiniciás el proceso.
 
 ## ⚠️ Otras Notas de Seguridad (leer antes de exponerlo fuera de tu red local)
 
