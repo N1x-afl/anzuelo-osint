@@ -212,6 +212,101 @@ def test_analyze_url_chain_handles_connection_failure(
 
 
 # ---------------------------------------------------------------------------
+# analyze_url_chain — protección anti-SSRF
+# ---------------------------------------------------------------------------
+
+@patch("backend.services.analyzer.threat_intel.check_domain_whois")
+@patch("backend.services.analyzer.threat_intel.check_ip_abuseipdb")
+@patch("backend.services.analyzer.threat_intel.check_url_urlhaus")
+@patch("backend.services.analyzer.threat_intel.check_url_virustotal")
+@patch("backend.services.analyzer.socket.gethostbyname")
+@patch("backend.services.analyzer.requests.Session")
+def test_analyze_url_chain_blocks_loopback_target(
+    mock_session_cls, mock_gethostbyname, mock_vt_url, mock_urlhaus, mock_abuseipdb, mock_whois
+):
+    """Una URL que resuelve a 127.0.0.1 (o cualquier IP interna) nunca debe
+    llegar a generar una petición HTTP real — el servidor no puede usarse
+    como proxy hacia sí mismo ni hacia la red interna (SSRF)."""
+    mock_session = MagicMock()
+    mock_session_cls.return_value = mock_session
+    mock_gethostbyname.return_value = "127.0.0.1"
+
+    mock_vt_url.return_value = {"available": False, "reason": "sin key"}
+    mock_urlhaus.return_value = {"available": False, "reason": "sin key"}
+    mock_abuseipdb.return_value = {"available": False, "reason": "sin key"}
+    mock_whois.return_value = {"available": False, "reason": "sin red"}
+
+    result = ForensicAnalyzer.analyze_url_chain("http://127.0.0.1:8001/api/health")
+
+    assert result["blocked_ssrf"] is True
+    assert result["risk_score"] >= 80
+    assert "SSRF" in result["verdict"] or "bloqueado" in result["verdict"].lower()
+    assert mock_session.get.call_count == 0  # nunca se intentó la conexión
+
+
+@patch("backend.services.analyzer.threat_intel.check_domain_whois")
+@patch("backend.services.analyzer.threat_intel.check_ip_abuseipdb")
+@patch("backend.services.analyzer.threat_intel.check_url_urlhaus")
+@patch("backend.services.analyzer.threat_intel.check_url_virustotal")
+@patch("backend.services.analyzer.socket.gethostbyname")
+@patch("backend.services.analyzer.requests.Session")
+def test_analyze_url_chain_blocks_metadata_endpoint(
+    mock_session_cls, mock_gethostbyname, mock_vt_url, mock_urlhaus, mock_abuseipdb, mock_whois
+):
+    """169.254.169.254 (metadata de AWS/GCP/Azure) cae en link-local y debe
+    bloquearse igual que loopback/RFC1918."""
+    mock_session = MagicMock()
+    mock_session_cls.return_value = mock_session
+    mock_gethostbyname.return_value = "169.254.169.254"
+
+    mock_vt_url.return_value = {"available": False, "reason": "sin key"}
+    mock_urlhaus.return_value = {"available": False, "reason": "sin key"}
+    mock_abuseipdb.return_value = {"available": False, "reason": "sin key"}
+    mock_whois.return_value = {"available": False, "reason": "sin red"}
+
+    result = ForensicAnalyzer.analyze_url_chain("http://169.254.169.254/latest/meta-data/")
+
+    assert result["blocked_ssrf"] is True
+    assert mock_session.get.call_count == 0
+
+
+@patch("backend.services.analyzer.threat_intel.check_domain_whois")
+@patch("backend.services.analyzer.threat_intel.check_ip_abuseipdb")
+@patch("backend.services.analyzer.threat_intel.check_url_urlhaus")
+@patch("backend.services.analyzer.threat_intel.check_url_virustotal")
+@patch("backend.services.analyzer.socket.gethostbyname")
+@patch("backend.services.analyzer.requests.Session")
+def test_analyze_url_chain_blocks_redirect_to_internal_ip(
+    mock_session_cls, mock_gethostbyname, mock_vt_url, mock_urlhaus, mock_abuseipdb, mock_whois
+):
+    """Una URL PÚBLICA que redirige (302) hacia una IP interna debe cortarse
+    ahí — el chequeo anti-SSRF se repite en cada salto, no solo en el inicial."""
+    mock_session = MagicMock()
+    mock_session_cls.return_value = mock_session
+
+    redirect_response = MagicMock()
+    redirect_response.status_code = 302
+    redirect_response.headers = {"Location": "http://10.0.0.5/internal-admin"}
+    mock_session.get.return_value = redirect_response
+
+    # Primer hop (hostname público) resuelve a una IP pública real (8.8.8.8);
+    # el segundo hop (10.0.0.5, de la redirección) resuelve a sí mismo, privada.
+    mock_gethostbyname.side_effect = ["8.8.8.8", "10.0.0.5"]
+
+    mock_vt_url.return_value = {"available": False, "reason": "sin key"}
+    mock_urlhaus.return_value = {"available": False, "reason": "sin key"}
+    mock_abuseipdb.return_value = {"available": False, "reason": "sin key"}
+    mock_whois.return_value = {"available": False, "reason": "sin red"}
+
+    result = ForensicAnalyzer.analyze_url_chain("https://acortador-publico.example/x")
+
+    assert result["blocked_ssrf"] is True
+    assert result["risk_score"] >= 80
+    # Se permitió el primer salto (público) pero se cortó antes del segundo (interno)
+    assert mock_session.get.call_count == 1
+
+
+# ---------------------------------------------------------------------------
 # decode_and_analyze_qr_image
 # ---------------------------------------------------------------------------
 

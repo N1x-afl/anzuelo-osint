@@ -737,6 +737,24 @@
       }
     }
 
+    /* Escapa texto antes de insertarlo en innerHTML. TODO dato que viene del
+       backend y se originó en algo que un atacante controla (cabeceras de
+       email, texto de SMS, URLs, payload de un QR) tiene que pasar por acá
+       antes de ir a una plantilla — si no, un remitente malicioso puede meter
+       <img onerror=...> en el "From:" o en el texto del SMS y ese script se
+       ejecuta en el navegador del analista que lo revisa (XSS almacenado),
+       con el riesgo extra de que el JWT vive en localStorage y un script así
+       lo puede robar. */
+    function escapeHtml(value) {
+      if (value === null || value === undefined) return '';
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     function loadingBlock(colorClass, text) {
       return `
         <div class="space-y-2">
@@ -914,14 +932,14 @@
         const isHighRisk = data.risk_score >= 60;
         resDiv.innerHTML = `
           <div class="p-3 rounded-lg ${isHighRisk ? 'bg-rose-950/60 border border-rose-800 text-rose-300' : 'bg-emerald-950/60 border border-emerald-800 text-emerald-300'} mb-2">
-            <span class="text-sm font-bold ${isHighRisk ? 'glitch-text' : ''}" ${isHighRisk ? `data-text="${data.verdict} (Score: ${data.risk_score}/100)"` : ''}>${data.verdict} (Score: ${data.risk_score}/100)</span>
+            <span class="text-sm font-bold ${isHighRisk ? 'glitch-text' : ''}" ${isHighRisk ? `data-text="${escapeHtml(data.verdict)} (Score: ${data.risk_score}/100)"` : ''}>${escapeHtml(data.verdict)} (Score: ${data.risk_score}/100)</span>
           </div>
-          <div><span class="text-slate-400">Remitente:</span> <span class="text-white">${data.from}</span></div>
-          <div><span class="text-slate-400">Dominio extraído:</span> <span class="text-cyan-400">${data.domain || 'N/A'}</span></div>
+          <div><span class="text-slate-400">Remitente:</span> <span class="text-white">${escapeHtml(data.from)}</span></div>
+          <div><span class="text-slate-400">Dominio extraído:</span> <span class="text-cyan-400">${escapeHtml(data.domain) || 'N/A'}</span></div>
           <div><span class="text-slate-400">Saltos SMTP:</span> <span class="text-white">${data.hops_count}</span></div>
-          <div><span class="text-slate-400">SPF TXT:</span> <span class="${data.spf && data.spf.includes('DETECTED') ? 'text-emerald-400' : 'text-rose-400'}">${data.spf}</span></div>
-          <div><span class="text-slate-400">DMARC TXT:</span> <span class="${data.dmarc && data.dmarc.includes('DETECTED') ? 'text-emerald-400' : 'text-rose-400'}">${data.dmarc}</span></div>
-          <div><span class="text-slate-400">Servidores MX:</span> <span class="text-slate-300">${data.mx_records ? data.mx_records.join(', ') : 'Sin registros MX'}</span></div>
+          <div><span class="text-slate-400">SPF TXT:</span> <span class="${data.spf && data.spf.includes('DETECTED') ? 'text-emerald-400' : 'text-rose-400'}">${escapeHtml(data.spf)}</span></div>
+          <div><span class="text-slate-400">DMARC TXT:</span> <span class="${data.dmarc && data.dmarc.includes('DETECTED') ? 'text-emerald-400' : 'text-rose-400'}">${escapeHtml(data.dmarc)}</span></div>
+          <div><span class="text-slate-400">Servidores MX:</span> <span class="text-slate-300">${data.mx_records ? escapeHtml(data.mx_records.join(', ')) : 'Sin registros MX'}</span></div>
           ${renderThreatIntelBlock(data.threat_intel)}
         `;
       } catch (err) {
@@ -958,8 +976,8 @@
               ${data.is_smishing_probable ? 'Probable Smishing Detectado' : 'Mensaje de Bajo Riesgo'} (Urgencia: ${data.urgency_score}/100)
             </span>
           </div>
-          <div><span class="text-slate-400">Disparadores detectados:</span> <span class="text-amber-400">${data.matched_triggers ? data.matched_triggers.join(', ') : 'Ninguno'}</span></div>
-          <div><span class="text-slate-400">URLs en el mensaje:</span> <span class="text-cyan-400">${data.extracted_urls ? data.extracted_urls.join(', ') : 'Sin enlaces'}</span></div>
+          <div><span class="text-slate-400">Disparadores detectados:</span> <span class="text-amber-400">${data.matched_triggers ? escapeHtml(data.matched_triggers.join(', ')) : 'Ninguno'}</span></div>
+          <div><span class="text-slate-400">URLs en el mensaje:</span> <span class="text-cyan-400">${data.extracted_urls ? escapeHtml(data.extracted_urls.join(', ')) : 'Sin enlaces'}</span></div>
           ${renderThreatIntelBlock(data.threat_intel)}
         `;
       } catch (err) {
@@ -993,13 +1011,13 @@
         const isHighRiskUrl = (data.risk_score || 0) >= 60;
         resDiv.innerHTML = `
           <div class="p-3 rounded-lg ${isHighRiskUrl ? 'bg-rose-950/60 border border-rose-800 text-rose-300' : 'bg-slate-900 border border-amber-900'} mb-2 font-mono text-xs">
-            <div class="${isHighRiskUrl ? 'text-rose-300 font-bold' : 'text-cyan-400 font-bold'}">${data.verdict || ''} ${data.risk_score != null ? `(Score: ${data.risk_score}/100)` : ''}</div>
-            <div class="text-slate-400 mt-1">Host: <span class="text-white">${data.hostname}</span></div>
-            <div class="text-slate-400">IP Resuelta: <span class="text-emerald-400">${data.resolved_ip}</span></div>
+            <div class="${isHighRiskUrl ? 'text-rose-300 font-bold' : 'text-cyan-400 font-bold'}">${escapeHtml(data.verdict) || ''} ${data.risk_score != null ? `(Score: ${data.risk_score}/100)` : ''}</div>
+            <div class="text-slate-400 mt-1">Host: <span class="text-white">${escapeHtml(data.hostname)}</span></div>
+            <div class="text-slate-400">IP Resuelta: <span class="text-emerald-400">${escapeHtml(data.resolved_ip)}</span></div>
             <div class="text-slate-400">Código HTTP Final: <span class="text-white">${data.status_code || 'Error'}</span></div>
             <div class="text-slate-400">Total Redirecciones: <span class="text-amber-400">${data.total_redirects}</span></div>
           </div>
-          <div class="text-slate-400 text-xs font-mono">Destino final: <span class="text-cyan-300 break-all">${data.final_url}</span></div>
+          <div class="text-slate-400 text-xs font-mono">Destino final: <span class="text-cyan-300 break-all">${escapeHtml(data.final_url)}</span></div>
           ${renderThreatIntelBlock(data.threat_intel)}
         `;
       } catch (err) {
@@ -1035,7 +1053,7 @@
         if (!data.success) {
           resDiv.innerHTML = `
             <div class="p-3 rounded-lg bg-rose-950/60 border border-rose-800 text-rose-300 font-mono">
-              <i class="fa-solid fa-triangle-exclamation"></i> ${data.error || 'Error al procesar la imagen.'}
+              <i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(data.error) || 'Error al procesar la imagen.'}
             </div>
           `;
           return;
@@ -1047,11 +1065,11 @@
           const isHighRiskQr = (u.risk_score || 0) >= 60;
           urlBlock = `
             <div class="p-3 mt-2 rounded-lg ${isHighRiskQr ? 'bg-rose-950/60 border border-rose-800' : 'bg-slate-900 border border-amber-900'} space-y-1 font-mono text-xs">
-              <div class="${isHighRiskQr ? 'text-rose-300 font-bold' : 'text-cyan-400 font-bold'}">${u.verdict || ''} ${u.risk_score != null ? `(Score: ${u.risk_score}/100)` : ''}</div>
-              <div class="text-slate-400">Host: <span class="text-white">${u.hostname}</span></div>
-              <div class="text-slate-400">IP Destino: <span class="text-emerald-400">${u.resolved_ip}</span></div>
+              <div class="${isHighRiskQr ? 'text-rose-300 font-bold' : 'text-cyan-400 font-bold'}">${escapeHtml(u.verdict) || ''} ${u.risk_score != null ? `(Score: ${u.risk_score}/100)` : ''}</div>
+              <div class="text-slate-400">Host: <span class="text-white">${escapeHtml(u.hostname)}</span></div>
+              <div class="text-slate-400">IP Destino: <span class="text-emerald-400">${escapeHtml(u.resolved_ip)}</span></div>
               <div class="text-slate-400">Saltos HTTP: <span class="text-amber-400">${u.total_redirects}</span> | Código final: <span class="text-white">${u.status_code || 'N/A'}</span></div>
-              <div class="text-slate-400">Destino final: <span class="text-cyan-300 break-all">${u.final_url}</span></div>
+              <div class="text-slate-400">Destino final: <span class="text-cyan-300 break-all">${escapeHtml(u.final_url)}</span></div>
               ${renderThreatIntelBlock(u.threat_intel)}
             </div>
           `;
@@ -1059,8 +1077,8 @@
 
         resDiv.innerHTML = `
           <div class="p-3 rounded-lg bg-amber-950/40 border border-amber-800 mb-2 font-mono">
-            <span class="text-xs uppercase font-bold text-amber-400">Contenido QR Detectado (${data.type}):</span>
-            <div class="text-white break-all mt-1 font-mono text-sm bg-slate-900 p-2.5 rounded border border-amber-900">${data.payload}</div>
+            <span class="text-xs uppercase font-bold text-amber-400">Contenido QR Detectado (${escapeHtml(data.type)}):</span>
+            <div class="text-white break-all mt-1 font-mono text-sm bg-slate-900 p-2.5 rounded border border-amber-900">${escapeHtml(data.payload)}</div>
           </div>
           ${urlBlock}
         `;
@@ -1091,13 +1109,13 @@
           return `
             <tr class="hover:bg-cyan-950/20 transition cursor-pointer" onclick="openDetailsModal(${index})">
               <td class="p-3 text-slate-400 text-[11px] whitespace-nowrap">
-                <span class="text-cyan-500">#${item.id}</span> · ${item.timestamp}
+                <span class="text-cyan-500">#${item.id}</span> · ${escapeHtml(item.timestamp)}
               </td>
-              <td class="p-3 font-bold text-cyan-400">${item.vector}</td>
-              <td class="p-3 max-w-xs truncate text-slate-300" title="${item.target}">${item.target}</td>
+              <td class="p-3 font-bold text-cyan-400">${escapeHtml(item.vector)}</td>
+              <td class="p-3 max-w-xs truncate text-slate-300" title="${escapeHtml(item.target)}">${escapeHtml(item.target)}</td>
               <td class="p-3">
                 <span class="px-2 py-0.5 rounded text-[11px] ${isHigh ? 'bg-rose-950/60 border border-rose-800 text-rose-300 shadow-[0_0_8px_rgba(244,63,94,0.3)]' : 'bg-emerald-950/60 border border-emerald-800 text-emerald-300'}">
-                  ${item.verdict}
+                  ${escapeHtml(item.verdict)}
                 </span>
               </td>
               <td class="p-3 font-mono ${isHigh ? 'text-rose-400 font-bold' : 'text-slate-400'}">${item.risk_score}/100</td>

@@ -1,15 +1,26 @@
 import io
+import ipaddress
 import re
 import socket
 import email
 from email import policy
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from PIL import Image
 from pyzbar.pyzbar import decode as decode_qr
 import dns.resolver
 import requests
 
 from backend.services import threat_intel
+
+# Protección anti-SSRF para analyze_url_chain: el servidor NO debe seguir URLs
+# que apunten a redes privadas/internas, loopback o al endpoint de metadata de
+# nube (169.254.169.254, cubierto por "link-local"). Se valida el esquema y la
+# IP resuelta antes de CADA conexión, incluida cada redirección de la cadena
+# — no alcanza con chequear solo la URL inicial, porque una URL pública
+# perfectamente válida puede redirigir (302) hacia una interna.
+ALLOWED_URL_SCHEMES = {"http", "https"}
+MAX_REDIRECTS = 5
+
 
 class ForensicAnalyzer:
 
@@ -143,6 +154,39 @@ class ForensicAnalyzer:
         }
 
     @staticmethod
+    def _is_blocked_ip(ip_str: str) -> bool:
+        """True si esta IP no debe ser alcanzada por una petición del servidor
+        (loopback, RFC1918, link-local -incluye metadata de nube 169.254.169.254-,
+        multicast, reservada o sin especificar). Si no se puede ni parsear, se
+        trata como bloqueada por seguridad (fail-closed)."""
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return True
+        return (
+            ip.is_private or ip.is_loopback or ip.is_link_local
+            or ip.is_reserved or ip.is_multicast or ip.is_unspecified
+        )
+
+    @staticmethod
+    def _resolve_and_guard(hostname: str):
+        """Resuelve el hostname y valida la IP ANTES de dejar que se intente
+        cualquier conexión. Devuelve (ip_o_'No resoluble', motivo_de_bloqueo).
+        motivo_de_bloqueo es "" si el destino está permitido."""
+        if not hostname:
+            return "No resoluble", ""
+        try:
+            ip = socket.gethostbyname(hostname)
+        except Exception:
+            return "No resoluble", ""
+        if ForensicAnalyzer._is_blocked_ip(ip):
+            return ip, (
+                f"Destino bloqueado: {ip} es una dirección privada/interna/reservada "
+                "(protección anti-SSRF — Anzuelo no sigue URLs hacia redes internas)."
+            )
+        return ip, ""
+
+    @staticmethod
     def analyze_url_chain(target_url: str) -> dict:
         if not target_url.startswith(("http://", "https://")):
             target_url = "https://" + target_url
@@ -150,38 +194,71 @@ class ForensicAnalyzer:
         parsed = urlparse(target_url)
         hostname = parsed.hostname or ""
 
-        resolved_ip = ""
-        try:
-            resolved_ip = socket.gethostbyname(hostname)
-        except Exception:
-            resolved_ip = "No resoluble"
-
         hops = []
         final_url = target_url
         status_code = None
+        ssrf_blocked = False
+        resolved_ip = "No resoluble"
 
-        try:
-            session = requests.Session()
-            res = session.get(target_url, allow_redirects=True, timeout=4, headers={"User-Agent": "Mozilla/5.0 (Anzuelo-OSINT-Triage)"})
-            for resp in res.history:
+        current_url = target_url
+        session = requests.Session()
+        for hop_index in range(MAX_REDIRECTS + 1):
+            hop_parsed = urlparse(current_url)
+            hop_scheme = (hop_parsed.scheme or "").lower()
+            hop_hostname = hop_parsed.hostname or ""
+
+            if hop_scheme not in ALLOWED_URL_SCHEMES:
+                hops.append({"error": f"Esquema no permitido: '{hop_scheme}'."})
+                ssrf_blocked = True
+                break
+
+            # Se resuelve y valida UNA vez por salto (incluido el primero):
+            # una URL pública puede redirigir (302) hacia una IP interna, y
+            # eso hay que bloquearlo igual que el destino inicial.
+            hop_ip, hop_block_reason = ForensicAnalyzer._resolve_and_guard(hop_hostname)
+            resolved_ip = hop_ip
+            if hop_block_reason:
+                hops.append({"error": hop_block_reason})
+                ssrf_blocked = True
+                break
+
+            try:
+                resp = session.get(
+                    current_url, allow_redirects=False, timeout=4,
+                    headers={"User-Agent": "Mozilla/5.0 (Anzuelo-OSINT-Triage)"},
+                )
+            except Exception as e:
+                hops.append({"error": str(e)})
+                break
+
+            status_code = resp.status_code
+            final_url = current_url
+
+            if status_code in (301, 302, 303, 307, 308) and hop_index < MAX_REDIRECTS:
+                location = resp.headers.get("Location", "")
                 hops.append({
-                    "url": resp.url,
-                    "status_code": resp.status_code,
-                    "location": resp.headers.get("Location", "")
+                    "url": current_url,
+                    "status_code": status_code,
+                    "location": location,
                 })
-            final_url = res.url
-            status_code = res.status_code
-        except Exception as e:
-            hops.append({"error": str(e)})
+                if not location:
+                    break
+                current_url = urljoin(current_url, location)
+                continue
+            break
 
-        # Threat Intelligence: URL final en VirusTotal/URLhaus, IP resuelta en AbuseIPDB, edad del dominio
+        # Threat Intelligence: URL final en VirusTotal/URLhaus, IP resuelta en
+        # AbuseIPDB, edad del dominio. Solo se consulta sobre el último destino
+        # VALIDADO como no-privado — nunca sobre el objetivo bloqueado.
         ti_vt_url = threat_intel.check_url_virustotal(final_url)
         ti_urlhaus = threat_intel.check_url_urlhaus(final_url)
         ti_abuseipdb = threat_intel.check_ip_abuseipdb(resolved_ip)
         ti_whois = threat_intel.check_domain_whois(hostname)
 
+        total_redirects = sum(1 for h in hops if "location" in h)
+
         risk_score = 0
-        if len(hops) > 1:
+        if total_redirects > 0:
             risk_score += 20
         if resolved_ip in ("No resoluble", ""):
             risk_score += 15
@@ -204,7 +281,18 @@ class ForensicAnalyzer:
                 risk_score += 40
             elif age_days < 180:
                 risk_score += 20
+        if ssrf_blocked:
+            # Un intento de apuntar (directo o vía redirect) a una red interna
+            # es en sí mismo un indicador fuerte — no lo tratamos como "sin datos".
+            risk_score = max(risk_score, 80)
         risk_score = min(risk_score, 100)
+
+        if ssrf_blocked:
+            verdict = "Alto Riesgo (bloqueado: intento de acceso a red privada/interna — posible SSRF)"
+        elif risk_score >= 60:
+            verdict = "Alto Riesgo (URL maliciosa o IP comprometida)"
+        else:
+            verdict = "Bajo Riesgo / Sin coincidencias"
 
         return {
             "initial_url": target_url,
@@ -212,10 +300,11 @@ class ForensicAnalyzer:
             "hostname": hostname,
             "resolved_ip": resolved_ip,
             "status_code": status_code,
-            "total_redirects": len(hops),
+            "total_redirects": total_redirects,
             "hops_chain": hops,
+            "blocked_ssrf": ssrf_blocked,
             "risk_score": risk_score,
-            "verdict": "Alto Riesgo (URL maliciosa o IP comprometida)" if risk_score >= 60 else "Bajo Riesgo / Sin coincidencias",
+            "verdict": verdict,
             "threat_intel": {
                 "virustotal_url": ti_vt_url,
                 "urlhaus": ti_urlhaus,
