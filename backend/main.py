@@ -9,10 +9,13 @@ load_dotenv()
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from backend.services.analyzer import ForensicAnalyzer
-from backend.services.db import init_db, save_incident, get_recent_incidents, clear_all_incidents
+from backend.services.db import (
+    init_db, save_incident, get_recent_incidents, get_incident_by_id, clear_all_incidents
+)
+from backend.services import report_export
 
 # Inicializar tabla SQLite al iniciar el servicio
 init_db()
@@ -121,6 +124,39 @@ def get_history():
 def clear_history():
     success = clear_all_incidents()
     return {"success": success}
+
+# Endpoints de Exportación de Evidencia (CSV / PDF forense)
+@app.get("/api/export/csv")
+def export_csv():
+    incidents = get_recent_incidents(limit=1000)
+    csv_text = report_export.incidents_to_csv(incidents)
+    return Response(
+        content=csv_text,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=anzuelo_historial.csv"}
+    )
+
+@app.get("/api/export/history/pdf")
+def export_history_pdf(analyst: str = "No especificado"):
+    incidents = get_recent_incidents(limit=200)
+    pdf_bytes = report_export.history_to_pdf(incidents, analyst=analyst)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=anzuelo_historial.pdf"}
+    )
+
+@app.get("/api/export/incident/{incident_id}/pdf")
+def export_incident_pdf(incident_id: int, analyst: str = "No especificado"):
+    incident = get_incident_by_id(incident_id)
+    if not incident:
+        raise HTTPException(status_code=404, detail=f"Incidente #{incident_id} no encontrado.")
+    pdf_bytes = report_export.incident_to_pdf(incident, analyst=analyst)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=anzuelo_incidente_{incident_id}.pdf"}
+    )
 
 # Servir Frontend Unificado
 BASE_DIR = Path(__file__).resolve().parent.parent

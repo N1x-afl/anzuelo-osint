@@ -457,6 +457,12 @@
               <button onclick="loadHistory()" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-cyan-800 rounded text-xs font-mono transition flex items-center gap-1">
                 <i class="fa-solid fa-arrows-rotate"></i> Actualizar
               </button>
+              <button onclick="exportCSV()" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-emerald-800 rounded text-xs font-mono transition flex items-center gap-1">
+                <i class="fa-solid fa-file-csv"></i> Exportar CSV
+              </button>
+              <button onclick="exportHistoryPDF()" class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-800 rounded text-xs font-mono transition flex items-center gap-1">
+                <i class="fa-solid fa-file-pdf"></i> Exportar PDF
+              </button>
               <button onclick="clearHistory()" class="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded text-xs font-mono transition flex items-center gap-1">
                 <i class="fa-solid fa-trash-can"></i> Vaciar BD
               </button>
@@ -522,7 +528,10 @@
         <pre id="modal-json-content" class="text-cyan-300 whitespace-pre-wrap break-all"></pre>
       </div>
 
-      <div class="flex justify-end pt-2 border-t border-cyan-900">
+      <div class="flex justify-end gap-2 pt-2 border-t border-cyan-900">
+        <button onclick="exportIncidentPDF()" class="px-4 py-2 bg-amber-950/60 hover:bg-amber-900 text-amber-300 border border-amber-700 text-xs font-mono rounded transition flex items-center gap-1.5">
+          <i class="fa-solid fa-file-pdf"></i> Exportar Informe PDF
+        </button>
         <button onclick="closeDetailsModal()" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-cyan-700 text-xs font-mono rounded transition">
           Cerrar Inspector
         </button>
@@ -999,9 +1008,51 @@
       const item = window.incidentsCache[index];
       if (!item) return;
 
+      window.currentModalIncidentId = item.id;
       document.getElementById('modal-incident-id').innerText = `#${item.id} (${item.vector})`;
       document.getElementById('modal-json-content').innerText = JSON.stringify(item.details, null, 2);
       document.getElementById('modal-details').classList.remove('hidden');
+    }
+
+    async function downloadFromEndpoint(url, fallbackFilename) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          const errBody = await response.json().catch(() => ({}));
+          alert(`Error al exportar: ${errBody.detail || response.statusText}`);
+          return;
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        const filename = match ? match[1] : fallbackFilename;
+
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(link.href);
+      } catch (err) {
+        alert('Error de red al intentar exportar.');
+      }
+    }
+
+    function exportCSV() {
+      downloadFromEndpoint(`${API_BASE}/api/export/csv`, 'anzuelo_historial.csv');
+    }
+
+    function exportHistoryPDF() {
+      const analyst = encodeURIComponent(currentRole || 'No especificado');
+      downloadFromEndpoint(`${API_BASE}/api/export/history/pdf?analyst=${analyst}`, 'anzuelo_historial.pdf');
+    }
+
+    function exportIncidentPDF() {
+      const id = window.currentModalIncidentId;
+      if (!id) return;
+      const analyst = encodeURIComponent(currentRole || 'No especificado');
+      downloadFromEndpoint(`${API_BASE}/api/export/incident/${id}/pdf?analyst=${analyst}`, `anzuelo_incidente_${id}.pdf`);
     }
 
     function closeDetailsModal() {

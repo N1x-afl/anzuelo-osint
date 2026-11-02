@@ -65,6 +65,33 @@ def get_recent_incidents(limit: int = 50):
         print(f"[DB ERROR] Error al consultar historial: {e}")
         return []
 
+def get_incident_by_id(incident_id: int):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, timestamp, vector, target, verdict, risk_score, details_json
+            FROM incidents
+            WHERE id = ?
+        """, (incident_id,))
+        r = cursor.fetchone()
+        conn.close()
+        if not r:
+            return None
+        return {
+            "id": r["id"],
+            "timestamp": r["timestamp"],
+            "vector": r["vector"],
+            "target": r["target"],
+            "verdict": r["verdict"],
+            "risk_score": r["risk_score"],
+            "details": json.loads(r["details_json"])
+        }
+    except Exception as e:
+        print(f"[DB ERROR] Error al consultar incidente #{incident_id}: {e}")
+        return None
+
 def clear_all_incidents():
     try:
         conn = sqlite3.connect(DB_PATH)
