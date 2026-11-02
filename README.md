@@ -172,6 +172,7 @@ Además del análisis heurístico local (SPF/DMARC, patrones de SMS, cadena de r
 | [URLhaus](https://urlhaus.abuse.ch/) (abuse.ch) | Si la URL está en su base pública de malware/phishing | Sí (desde 2025) | Gratuita, [auth.abuse.ch](https://auth.abuse.ch/) |
 | WHOIS | Edad del dominio (días desde su registro) y registrador — un dominio recién creado es una señal fuerte de phishing | No | Protocolo público (puerto 43) |
 | [HaveIBeenPwned](https://haveibeenpwned.com/API/Key) | Si el email del remitente apareció en alguna brecha de datos conocida | Sí | **No tiene plan gratuito** — desde ~USD 4.39/mes (plan "Core 1") |
+| [ip-api.com](https://ip-api.com/) | Geolocalización (país/ciudad/ISP) de la IP del servidor que originó el correo, extraída de la cadena de headers "Received"; marca si es un proxy/VPN/datacenter conocido | No | Gratuita, 45 req/min, sin registro |
 
 **La app funciona igual sin ninguna key configurada** — cada fuente no configurada se muestra como "no disponible" en el resultado y no afecta el resto del análisis.
 

@@ -110,6 +110,17 @@ class ForensicAnalyzer:
         if ti_hibp.get("found"):
             risk_score += 15
 
+        # Threat Intelligence: geolocalización de la IP del servidor que
+        # originó el correo (primer salto SMTP público en la cadena
+        # "Received"). Un correo cuya cadena termina en un datacenter/VPN
+        # desconocido (en vez del ISP/mail provider esperado) es una señal
+        # de phishing — no definitiva por sí sola (hay empresas legítimas
+        # que envían desde la nube), pero útil como contexto.
+        origin_ip = ForensicAnalyzer._extract_origin_ip(received_hops)
+        ti_geo = threat_intel.check_ip_geolocation(origin_ip)
+        if ti_geo.get("found") and (ti_geo.get("is_proxy_or_vpn") or ti_geo.get("is_hosting")):
+            risk_score += 15
+
         risk_score = min(risk_score, 100)
 
         return {
@@ -122,12 +133,14 @@ class ForensicAnalyzer:
             "spf": spf_status,
             "dmarc": dmarc_status,
             "mx_records": mx_records,
+            "origin_ip": origin_ip or "No detectada",
             "risk_score": risk_score,
             "verdict": "Alto Riesgo (Spoofing probable)" if risk_score >= 60 else "Bajo Riesgo / Alineado",
             "threat_intel": {
                 "virustotal_domain": ti_domain,
                 "whois_domain": ti_whois,
-                "hibp_email": ti_hibp
+                "hibp_email": ti_hibp,
+                "geolocation_origin": ti_geo
             }
         }
 
@@ -164,6 +177,31 @@ class ForensicAnalyzer:
                 "urlhaus_first_url": ti_urlhaus
             }
         }
+
+    @staticmethod
+    def _extract_origin_ip(received_hops: list) -> str:
+        """Intenta ubicar la IP pública del servidor que originó el correo,
+        a partir de los headers "Received" (puede haber varios, uno por cada
+        salto SMTP por el que pasó el mensaje).
+
+        email.message.get_all("Received", ...) devuelve los headers en el
+        mismo orden en que aparecen en el mensaje — y cada servidor por el
+        que pasa un correo AGREGA su propio "Received" arriba de los demás
+        (al principio del mensaje), nunca al final. Es decir: el primer
+        elemento de la lista es el salto MÁS RECIENTE (el más cercano a
+        quien lo recibió), y el ÚLTIMO elemento es el salto MÁS ANTIGUO —
+        el más cercano al origen real del correo.
+
+        Por eso se recorre la lista en orden inverso, y se devuelve la
+        primera IP pública que aparezca (se saltean las privadas/internas,
+        típicas de relays corporativos propios, que no aportan geolocalización
+        útil del remitente real)."""
+        ip_pattern = re.compile(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b")
+        for hop in reversed(received_hops):
+            for candidate in ip_pattern.findall(hop):
+                if not ForensicAnalyzer._is_blocked_ip(candidate):
+                    return candidate
+        return ""
 
     @staticmethod
     def _is_blocked_ip(ip_str: str) -> bool:

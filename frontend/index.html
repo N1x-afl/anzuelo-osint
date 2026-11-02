@@ -845,7 +845,8 @@
       urlhaus: 'URLhaus (abuse.ch)',
       urlhaus_first_url: 'URLhaus (primer link)',
       whois_domain: 'WHOIS (edad del dominio)',
-      hibp_email: 'HaveIBeenPwned (brechas del email)'
+      hibp_email: 'HaveIBeenPwned (brechas del email)',
+      geolocation_origin: 'Geolocalización (IP de origen)'
     };
 
     function renderThreatIntelBlock(ti) {
@@ -889,6 +890,12 @@
           if (v.breach_names && v.breach_names.length) {
             detailHtml += `<div class="text-slate-600 text-[10px]">${v.breach_names.join(', ')}</div>`;
           }
+        } else if ('country' in v) {
+          const flagged = v.is_proxy_or_vpn || v.is_hosting;
+          const place = [v.city, v.region, v.country].filter(Boolean).join(', ');
+          statusHtml = `<span class="${flagged ? 'text-rose-400 font-bold' : 'text-slate-300'}">${place || 'ubicación desconocida'} (${v.ip})</span>`;
+          const tag = v.is_proxy_or_vpn ? 'Proxy/VPN' : (v.is_hosting ? 'Hosting/Datacenter' : '');
+          detailHtml += `<div class="${flagged ? 'text-rose-400' : 'text-slate-600'} text-[10px]">${v.isp || v.org || ''}${tag ? ` · ⚠ ${tag}` : ''}</div>`;
         } else {
           statusHtml = `<span class="text-amber-400">encontrado</span>`;
         }
@@ -947,6 +954,7 @@
           <div><span class="text-slate-400">SPF TXT:</span> <span class="${data.spf && data.spf.includes('DETECTED') ? 'text-emerald-400' : 'text-rose-400'}">${escapeHtml(data.spf)}</span></div>
           <div><span class="text-slate-400">DMARC TXT:</span> <span class="${data.dmarc && data.dmarc.includes('DETECTED') ? 'text-emerald-400' : 'text-rose-400'}">${escapeHtml(data.dmarc)}</span></div>
           <div><span class="text-slate-400">Servidores MX:</span> <span class="text-slate-300">${data.mx_records ? escapeHtml(data.mx_records.join(', ')) : 'Sin registros MX'}</span></div>
+          <div><span class="text-slate-400">IP de origen (SMTP):</span> <span class="text-slate-300">${escapeHtml(data.origin_ip)}</span></div>
           ${renderThreatIntelBlock(data.threat_intel)}
         `;
       } catch (err) {

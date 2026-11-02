@@ -28,6 +28,11 @@ VT_BASE = "https://www.virustotal.com/api/v3"
 ABUSEIPDB_BASE = "https://api.abuseipdb.com/api/v2"
 URLHAUS_BASE = "https://urlhaus-api.abuse.ch/v1"
 HIBP_BASE = "https://haveibeenpwned.com/api/v3"
+# ip-api.com: gratuita, sin API key, 45 req/min — pero el plan gratuito es
+# SOLO HTTP (no HTTPS; eso requiere su plan Pro). No es información sensible
+# en tránsito (es solo la IP que ya llegó en el header del correo), así que
+# no representa un riesgo real para Anzuelo.
+IP_API_BASE = "http://ip-api.com/json"
 
 TIMEOUT = 6  # segundos — no queremos que una API externa lenta trabe el triage
 WHOIS_TIMEOUT = 8  # el protocolo WHOIS (puerto 43) suele ser más lento que una API REST
@@ -211,6 +216,47 @@ def check_email_hibp(email_address: str) -> dict:
         }
     except Exception as e:
         return _unavailable(f"Error consultando HaveIBeenPwned: {e}")
+
+
+def check_ip_geolocation(ip: str) -> dict:
+    """Geolocalización (país, ciudad, ISP) de una IP pública vía ip-api.com.
+
+    Gratuita y sin API key — pero solo tiene sentido pasarle una IP PÚBLICA:
+    si la IP es privada/loopback/reservada (ej. no se pudo extraer ninguna
+    IP pública real de los headers "Received"), no hay nada que geolocalizar.
+    Esa validación la hace el caller (ForensicAnalyzer._extract_origin_ip ya
+    descarta las privadas antes de llegar acá).
+    """
+    if not ip:
+        return _unavailable("Sin IP de origen para geolocalizar.")
+
+    try:
+        resp = requests.get(
+            f"{IP_API_BASE}/{ip}",
+            params={"fields": "status,message,country,countryCode,region,regionName,city,isp,org,proxy,hosting,query"},
+            timeout=TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        if data.get("status") != "success":
+            return _unavailable(f"ip-api.com no pudo geolocalizar {ip}: {data.get('message', 'motivo desconocido')}.")
+
+        return {
+            "available": True,
+            "found": True,
+            "ip": ip,
+            "country": data.get("country"),
+            "country_code": data.get("countryCode"),
+            "region": data.get("regionName"),
+            "city": data.get("city"),
+            "isp": data.get("isp"),
+            "org": data.get("org"),
+            "is_proxy_or_vpn": data.get("proxy", False),
+            "is_hosting": data.get("hosting", False),
+        }
+    except Exception as e:
+        return _unavailable(f"Error consultando ip-api.com: {e}")
 
 
 def _first(value):

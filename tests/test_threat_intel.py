@@ -255,6 +255,61 @@ def test_hibp_429_degrades_without_crashing():
     assert "rate" in result["reason"]
 
 
+# ---------------------------------------------------------------------------
+# ip-api.com (geolocalización de IP): sin IP, éxito, fallo
+# ---------------------------------------------------------------------------
+
+def test_geolocation_without_ip_degrades_without_network():
+    with patch("backend.services.threat_intel.requests.get") as mock_get:
+        result = threat_intel.check_ip_geolocation("")
+        mock_get.assert_not_called()
+    assert result == {"available": False, "reason": "Sin IP de origen para geolocalizar."}
+
+
+def test_geolocation_success_returns_country_and_flags():
+    with patch("backend.services.threat_intel.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = lambda: None
+        mock_resp.json.return_value = {
+            "status": "success", "country": "Rumania", "countryCode": "RO",
+            "regionName": "Bucarest", "city": "Bucarest", "isp": "DataCenter SRL",
+            "org": "DataCenter SRL", "proxy": False, "hosting": True,
+        }
+        mock_get.return_value = mock_resp
+        result = threat_intel.check_ip_geolocation("45.33.12.10")
+        args, _ = mock_get.call_args
+        assert "45.33.12.10" in args[0]
+
+    assert result["available"] is True
+    assert result["found"] is True
+    assert result["country"] == "Rumania"
+    assert result["is_hosting"] is True
+    assert result["is_proxy_or_vpn"] is False
+
+
+def test_geolocation_api_failure_status_degrades_gracefully():
+    with patch("backend.services.threat_intel.requests.get") as mock_get:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = lambda: None
+        mock_resp.json.return_value = {"status": "fail", "message": "invalid query"}
+        mock_get.return_value = mock_resp
+        result = threat_intel.check_ip_geolocation("no-es-una-ip")
+
+    assert result["available"] is False
+    assert "invalid query" in result["reason"]
+
+
+def test_geolocation_network_error_degrades_gracefully():
+    with patch("backend.services.threat_intel.requests.get") as mock_get:
+        mock_get.side_effect = Exception("timed out")
+        result = threat_intel.check_ip_geolocation("8.8.8.8")
+
+    assert result["available"] is False
+    assert "timed out" in result["reason"]
+
+
 def test_whois_empty_hostname_degrades_without_network():
     with patch("backend.services.threat_intel.whois_lib.whois") as mock_whois:
         result = threat_intel.check_domain_whois("")

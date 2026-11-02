@@ -160,6 +160,86 @@ def test_analyze_email_headers_hibp_without_key_degrades_without_network():
 
 
 # ---------------------------------------------------------------------------
+# _extract_origin_ip
+# ---------------------------------------------------------------------------
+
+def test_extract_origin_ip_skips_private_hops_and_finds_public_one():
+    """Los "Received" se agregan al PRINCIPIO del mensaje en cada salto, así
+    que msg.get_all(...) los devuelve en orden "más reciente primero" — el
+    salto más cercano al origen real es el ÚLTIMO de la lista. Este test
+    simula 2 saltos internos (relay corporativo, IP privada) seguidos del
+    salto real de origen (IP pública), en ese orden."""
+    hops = [
+        "from mx-interno2.corp.local (10.0.0.5) by mx-interno1.corp.local",
+        "from mx-interno1.corp.local (192.168.1.10) by gateway.corp.local",
+        "from mail.dominio-sospechoso.test (45.33.12.10) by mx-interno2.corp.local",
+    ]
+    ip = ForensicAnalyzer._extract_origin_ip(hops)
+    assert ip == "45.33.12.10"
+
+
+def test_extract_origin_ip_no_public_ip_returns_empty_string():
+    hops = ["from gateway.corp.local (10.0.0.1) by mx-interno1.corp.local (192.168.1.1)"]
+    assert ForensicAnalyzer._extract_origin_ip(hops) == ""
+
+
+def test_extract_origin_ip_empty_hops_returns_empty_string():
+    assert ForensicAnalyzer._extract_origin_ip([]) == ""
+
+
+@patch("backend.services.analyzer.threat_intel.check_ip_geolocation")
+@patch("backend.services.analyzer.threat_intel.check_email_hibp")
+@patch("backend.services.analyzer.threat_intel.check_domain_whois")
+@patch("backend.services.analyzer.threat_intel.check_domain_virustotal")
+def test_analyze_email_headers_hosting_origin_bumps_score_and_exposes_geo(mock_vt, mock_whois, mock_hibp, mock_geo):
+    """Un correo cuyo salto SMTP de origen resuelve a un datacenter/hosting
+    (en vez de un ISP normal) debe sumar riesgo y quedar expuesto en
+    threat_intel.geolocation_origin — y check_ip_geolocation debe recibir la
+    IP pública extraída del header Received, no una privada."""
+    mock_vt.return_value = {"available": False, "reason": "sin key"}
+    mock_whois.return_value = {"available": False, "reason": "sin red"}
+    mock_hibp.return_value = {"available": False, "reason": "sin key"}
+    mock_geo.return_value = {
+        "available": True, "found": True, "ip": "45.33.12.10",
+        "country": "Rumania", "is_hosting": True, "is_proxy_or_vpn": False,
+    }
+
+    headers = (
+        "From: Soporte Falso <soporte@dominio-sospechoso.test>\n"
+        "To: victima@example.com\n"
+        "Subject: Verifique su cuenta urgente\n"
+        "Received: from mail.dominio-sospechoso.test (45.33.12.10) by mx.example.com\n"
+    )
+
+    with patch("backend.services.analyzer.dns.resolver.Resolver") as mock_resolver_cls:
+        mock_resolver = MagicMock()
+        mock_resolver.resolve.side_effect = Exception("NXDOMAIN")
+        mock_resolver_cls.return_value = mock_resolver
+        result = ForensicAnalyzer.analyze_email_headers(headers)
+
+    mock_geo.assert_called_once_with("45.33.12.10")
+    assert result["origin_ip"] == "45.33.12.10"
+    assert result["threat_intel"]["geolocation_origin"]["country"] == "Rumania"
+    assert result["risk_score"] == 100  # ya saturado por SPF+DMARC+MX; confirma que no rompe el cap
+
+
+def test_analyze_email_headers_without_received_header_marks_origin_undetected():
+    headers = "From: alguien@example.com\nSubject: sin received\n"
+    with patch("backend.services.analyzer.threat_intel.check_domain_whois") as mock_whois, \
+         patch("backend.services.analyzer.threat_intel.check_domain_virustotal") as mock_vt, \
+         patch("backend.services.analyzer.dns.resolver.Resolver") as mock_resolver_cls:
+        mock_vt.return_value = {"available": False, "reason": "sin key"}
+        mock_whois.return_value = {"available": False, "reason": "sin red"}
+        mock_resolver = MagicMock()
+        mock_resolver.resolve.side_effect = Exception("NXDOMAIN")
+        mock_resolver_cls.return_value = mock_resolver
+        result = ForensicAnalyzer.analyze_email_headers(headers)
+
+    assert result["origin_ip"] == "No detectada"
+    assert result["threat_intel"]["geolocation_origin"]["available"] is False
+
+
+# ---------------------------------------------------------------------------
 # analyze_url_chain
 # ---------------------------------------------------------------------------
 
