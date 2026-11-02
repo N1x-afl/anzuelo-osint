@@ -79,6 +79,15 @@ class ForensicAnalyzer:
             elif ti_domain.get("suspicious", 0) > 0:
                 risk_score += 20
 
+        # Threat Intelligence: edad del dominio del remitente (WHOIS)
+        ti_whois = threat_intel.check_domain_whois(domain)
+        if ti_whois.get("found"):
+            age_days = ti_whois.get("age_days", 9999)
+            if age_days < 30:
+                risk_score += 40
+            elif age_days < 180:
+                risk_score += 20
+
         risk_score = min(risk_score, 100)
 
         return {
@@ -94,7 +103,8 @@ class ForensicAnalyzer:
             "risk_score": risk_score,
             "verdict": "Alto Riesgo (Spoofing probable)" if risk_score >= 60 else "Bajo Riesgo / Alineado",
             "threat_intel": {
-                "virustotal_domain": ti_domain
+                "virustotal_domain": ti_domain,
+                "whois_domain": ti_whois
             }
         }
 
@@ -164,10 +174,11 @@ class ForensicAnalyzer:
         except Exception as e:
             hops.append({"error": str(e)})
 
-        # Threat Intelligence: URL final en VirusTotal/URLhaus, IP resuelta en AbuseIPDB
+        # Threat Intelligence: URL final en VirusTotal/URLhaus, IP resuelta en AbuseIPDB, edad del dominio
         ti_vt_url = threat_intel.check_url_virustotal(final_url)
         ti_urlhaus = threat_intel.check_url_urlhaus(final_url)
         ti_abuseipdb = threat_intel.check_ip_abuseipdb(resolved_ip)
+        ti_whois = threat_intel.check_domain_whois(hostname)
 
         risk_score = 0
         if len(hops) > 1:
@@ -187,6 +198,12 @@ class ForensicAnalyzer:
                 risk_score += 30
             elif score >= 20:
                 risk_score += 15
+        if ti_whois.get("found"):
+            age_days = ti_whois.get("age_days", 9999)
+            if age_days < 30:
+                risk_score += 40
+            elif age_days < 180:
+                risk_score += 20
         risk_score = min(risk_score, 100)
 
         return {
@@ -202,7 +219,8 @@ class ForensicAnalyzer:
             "threat_intel": {
                 "virustotal_url": ti_vt_url,
                 "urlhaus": ti_urlhaus,
-                "abuseipdb_ip": ti_abuseipdb
+                "abuseipdb_ip": ti_abuseipdb,
+                "whois_domain": ti_whois
             }
         }
 

@@ -706,7 +706,8 @@
       virustotal_url: 'VirusTotal (URL)',
       abuseipdb_ip: 'AbuseIPDB (IP)',
       urlhaus: 'URLhaus (abuse.ch)',
-      urlhaus_first_url: 'URLhaus (primer link)'
+      urlhaus_first_url: 'URLhaus (primer link)',
+      whois_domain: 'WHOIS (edad del dominio)'
     };
 
     function renderThreatIntelBlock(ti) {
@@ -714,12 +715,22 @@
 
       const rows = Object.entries(ti).map(([key, v]) => {
         const label = TI_LABELS[key] || key;
+        const isWhois = key.startsWith('whois');
         let statusHtml = '';
         let detailHtml = '';
 
         if (!v || v.available === false) {
           statusHtml = `<span class="text-slate-500">no disponible</span>`;
           detailHtml = `<div class="text-slate-600 text-[10px]">${(v && v.reason) || ''}</div>`;
+        } else if (isWhois && v.found === false) {
+          statusHtml = `<span class="text-slate-500">sin fecha de creación pública</span>`;
+        } else if (isWhois && 'age_days' in v) {
+          const age = v.age_days;
+          const cls = age < 30 ? 'text-rose-400 font-bold' : (age < 180 ? 'text-amber-400' : 'text-emerald-400');
+          statusHtml = `<span class="${cls}">${age} días (creado ${v.creation_date})</span>`;
+          if (v.registrar) {
+            detailHtml += `<div class="text-slate-600 text-[10px]">${v.registrar}</div>`;
+          }
         } else if (v.found === false) {
           statusHtml = `<span class="text-emerald-400">✓ sin coincidencias</span>`;
         } else if ('malicious' in v) {

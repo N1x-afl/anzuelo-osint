@@ -49,7 +49,7 @@ Plataforma unificada de respuesta preliminar y análisis forense rápido frente 
 - **Frontend:** HTML5 semántico + Tailwind CSS (CDN) + FontAwesome (CDN)
 - **Procesamiento de Imágenes & Códigos:** `Pillow`, `pyzbar` (librería nativa `zbar`)
 - **Resolución Forense de Red:** `dnspython`, `requests`, `socket`
-- **Threat Intelligence:** VirusTotal API v3, AbuseIPDB API v2, URLhaus API (abuse.ch) — vía `backend/services/threat_intel.py`, configurables por `.env` (`python-dotenv`)
+- **Threat Intelligence:** VirusTotal API v3, AbuseIPDB API v2, URLhaus API (abuse.ch), WHOIS (`python-whois`) — vía `backend/services/threat_intel.py`, configurables por `.env` (`python-dotenv`)
 - **Almacenamiento:** SQLite3 (`anzuelo.db`, local — no versionado en git)
 - **Sistema Operativo Base:** CachyOS / Arch Linux
 
@@ -110,6 +110,7 @@ Además del análisis heurístico local (SPF/DMARC, patrones de SMS, cadena de r
 | [VirusTotal](https://www.virustotal.com/gui/join-us) | Reputación de dominio y de URL (cuántos motores antivirus la marcan) | Sí | ~4 req/min |
 | [AbuseIPDB](https://www.abuseipdb.com/register) | Score de abuso de la IP resuelta (0-100) | Sí | 1000 req/día |
 | [URLhaus](https://urlhaus.abuse.ch/) (abuse.ch) | Si la URL está en su base pública de malware/phishing | No | Sin límite publicado |
+| WHOIS | Edad del dominio (días desde su registro) y registrador — un dominio recién creado es una señal fuerte de phishing | No | Protocolo público (puerto 43) |
 
 **La app funciona igual sin ninguna key configurada** — cada fuente no configurada se muestra como "no disponible" en el resultado y no afecta el resto del análisis.
 
