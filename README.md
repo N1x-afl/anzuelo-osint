@@ -19,6 +19,7 @@ Plataforma unificada de respuesta preliminar y análisis forense rápido frente 
 - **Persistencia Local con SQLite:** Registro de auditoría integrado para trazabilidad de incidentes sin dependencias de bases de datos externas.
 - **Exportación de Evidencia (CSV / PDF forense):** Historial completo a CSV, informe PDF resumen de todos los incidentes, o informe PDF individual por incidente con hash SHA-256 de integridad (cadena de custodia) — ver sección dedicada más abajo.
 - **Autenticación Real + Rate Limiting:** Login respaldado por backend (bcrypt + JWT), roles (admin/analista/viewer) y límite de intentos para frenar fuerza bruta — ver sección dedicada más abajo.
+- **Dockerizado:** `Dockerfile` + `docker-compose.yml` listos para levantar todo con un comando, sin instalar Python/zbar en el host.
 - **Arquitectura de Proceso Único:** Backend en FastAPI y Frontend (HTML/Tailwind CSS) servidos bajo el mismo socket y proceso, accesible localmente o mediante la IP física de la LAN.
 - **Interfaz táctica tipo SOC:** fondo de red animado (nodos conectados sobre Canvas), barrido de radar, esquinas HUD en los paneles y estados de "escaneo" en los botones de acción.
 
@@ -102,6 +103,23 @@ chmod +x run.sh
 ```
 
 Por defecto el servicio queda escuchando en `0.0.0.0:8001` — accesible desde `http://localhost:8001` y desde cualquier equipo de la misma LAN por la IP física del host.
+
+### 4. Alternativa: Docker
+
+Si preferís no instalar Python/zbar directamente en tu sistema, Anzuelo también corre en un contenedor:
+
+```bash
+git clone https://github.com/N1x-afl/anzuelo-osint.git
+cd anzuelo-osint
+
+cp .env.example .env   # opcional, completá las keys que tengas
+touch anzuelo.db        # importante: crea el archivo vacío ANTES del primer `up`,
+                         # si no Docker monta una carpeta en su lugar y falla
+
+docker compose up --build
+```
+
+Con eso queda escuchando en `http://localhost:8001`, igual que con `run.sh`. `anzuelo.db` vive en tu máquina (montado como volumen), así que el historial de incidentes y los usuarios sobreviven a un `docker compose build` posterior. Para correrlo en segundo plano: `docker compose up -d --build`. Para pararlo: `docker compose down`.
 
 ---
 

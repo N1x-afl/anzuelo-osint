@@ -1,0 +1,15 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.gitignore
+anzuelo.db
+*.db
+*.sqlite3
+.env
+docs/
+*.md
+.pytest_cache/
+.vscode/
+.idea/

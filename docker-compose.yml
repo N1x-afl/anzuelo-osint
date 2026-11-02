@@ -1,0 +1,24 @@
+services:
+  anzuelo:
+    build: .
+    container_name: anzuelo-osint
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    env_file:
+      # Copiá .env.example a .env antes de levantar (ver README). Si no existe,
+      # el contenedor arranca igual: Threat Intelligence queda "no disponible"
+      # y el JWT_SECRET se genera al azar en cada reinicio del contenedor.
+      - path: .env
+        required: false
+    volumes:
+      # anzuelo.db persiste en el host, fuera de la imagen — así el historial
+      # de incidentes y los usuarios (con sus claves) sobreviven a un
+      # `docker compose build` / `docker compose up --build`.
+      - ./anzuelo.db:/app/anzuelo.db
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
