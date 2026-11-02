@@ -77,6 +77,26 @@ def test_history_to_pdf_empty_list_does_not_crash():
     assert pdf_bytes.startswith(b"%PDF")
 
 
+def test_history_to_pdf_wraps_long_verdict_instead_of_overflowing():
+    """Un veredicto largo (como el de un bloqueo SSRF) en una celda de Table
+    con texto plano NO hace word-wrap y se desborda tapando la columna
+    siguiente (Score) — visible en el PDF exportado, no tira excepción.
+    Las celdas largas se envuelven en Paragraph (_cell) para que sí ajusten
+    al ancho de columna; acá solo confirmamos que sigue generando un PDF
+    válido con ese veredicto largo real."""
+    incidents = [{
+        "id": 9, "timestamp": "2026-11-02 13:05:57", "vector": "URL / Redirección",
+        "target": "http://127.0.0.1:8001/api/health", "risk_score": 80,
+        "verdict": "Alto Riesgo (bloqueado: intento de acceso a red privada/interna — posible SSRF)",
+        "details": {},
+    }]
+    pdf_bytes = report_export.history_to_pdf(incidents, analyst="Administrador")
+    assert pdf_bytes.startswith(b"%PDF")
+
+    pdf_bytes = report_export.incident_to_pdf(incidents[0], analyst="Administrador")
+    assert pdf_bytes.startswith(b"%PDF")
+
+
 def test_pdf_export_does_not_crash_on_malformed_markup_in_analyst():
     """'analyst' llega de un query param que el usuario escribe libremente, y
     Paragraph() de reportlab interpreta un subconjunto de markup tipo XML —

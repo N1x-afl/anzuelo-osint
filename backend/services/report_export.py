@@ -103,7 +103,25 @@ def _base_styles():
         name="AnzueloMono", parent=styles["Code"],
         fontSize=7.5, leading=10, textColor=colors.HexColor("#1e293b"),
     ))
+    # Para celdas de Table con texto que puede ser largo (veredictos, URLs,
+    # valores de threat_intel): una celda con un string plano NO hace
+    # word-wrap en reportlab y el texto se desborda tapando la columna
+    # siguiente. Envolver el valor en un Paragraph con estos estilos sí
+    # ajusta el texto al ancho real de la columna.
+    styles.add(ParagraphStyle(
+        name="CellWrap", parent=styles["Normal"],
+        fontSize=7.5, leading=9, textColor=colors.HexColor("#1e293b"),
+    ))
+    styles.add(ParagraphStyle(
+        name="CellWrapHigh", parent=styles["CellWrap"],
+        textColor=RISK_HIGH, fontName="Helvetica-Bold",
+    ))
     return styles
+
+
+def _cell(value, style) -> Paragraph:
+    """Celda de Table que SÍ hace word-wrap (ver nota en _base_styles)."""
+    return Paragraph(_xml_escape(str(value)) if value is not None else "—", style)
 
 
 def _header_flowables(styles, title: str, analyst: str):
@@ -133,10 +151,6 @@ def _header_flowables(styles, title: str, analyst: str):
     return flow
 
 
-def _verdict_color(risk_score: int):
-    return RISK_HIGH if (risk_score or 0) >= 60 else RISK_LOW
-
-
 # ---------------------------------------------------------------------------
 # PDF — informe de un solo incidente (forense, con hash de integridad)
 # ---------------------------------------------------------------------------
@@ -157,15 +171,21 @@ def incident_to_pdf(incident: dict, analyst: str = "No especificado") -> bytes:
 
     story = _header_flowables(styles, f"Informe de Incidente #{incident.get('id')}", analyst)
 
-    # Resumen ejecutivo
-    story.append(Paragraph("Resumen del Incidente", styles["AnzueloSection"]))
+    # Resumen ejecutivo. Objetivo y Veredicto van envueltos en Paragraph
+    # (_cell) porque pueden ser texto largo (una URL, un veredicto de SSRF
+    # bloqueado, etc.) — una celda de Table con string plano no hace
+    # word-wrap y el texto se desborda tapando lo que sigue.
     summary_data = [
         ["Vector", incident.get("vector", "—")],
         ["Timestamp (triage local)", incident.get("timestamp", "—")],
-        ["Objetivo / Muestra analizada", incident.get("target", "—")],
-        ["Veredicto", incident.get("verdict", "—")],
+        ["Objetivo / Muestra analizada", _cell(incident.get("target", "—"), styles["CellWrap"])],
+        ["Veredicto", _cell(
+            incident.get("verdict", "—"),
+            styles["CellWrapHigh"] if risk_score >= 60 else styles["CellWrap"],
+        )],
         ["Risk Score", f"{risk_score}/100"],
     ]
+    story.append(Paragraph("Resumen del Incidente", styles["AnzueloSection"]))
     summary_table = Table(summary_data, colWidths=[55 * mm, 115 * mm])
     summary_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f1f5f9")),
@@ -174,18 +194,20 @@ def incident_to_pdf(incident: dict, analyst: str = "No especificado") -> bytes:
         ("FONTSIZE", (0, 0), (-1, -1), 8.5),
         ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("TEXTCOLOR", (1, 4), (1, 4), _verdict_color(risk_score)),
-        ("FONTNAME", (1, 4), (1, 4), "Helvetica-Bold"),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
     story.append(summary_table)
 
-    # Detalle técnico forense (incluye threat_intel aplanado)
+    # Detalle técnico forense (incluye threat_intel aplanado). Mismo motivo:
+    # tanto la clave aplanada ("threat_intel.whois_domain.creation_date")
+    # como el valor pueden ser largos.
     story.append(Paragraph("Detalle Técnico Forense", styles["AnzueloSection"]))
     flat_rows = _flatten(details)
     if flat_rows:
-        detail_data = [["Campo", "Valor"]] + [[k, v[:180]] for k, v in flat_rows]
+        detail_data = [["Campo", "Valor"]] + [
+            [_cell(k, styles["CellWrap"]), _cell(v[:180], styles["CellWrap"])] for k, v in flat_rows
+        ]
         detail_table = Table(detail_data, colWidths=[55 * mm, 115 * mm], repeatRows=1)
         detail_table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), BRAND_CYAN),
@@ -251,13 +273,14 @@ def history_to_pdf(incidents: list, analyst: str = "No especificado") -> bytes:
         header = ["ID", "Timestamp", "Vector", "Objetivo", "Veredicto", "Score"]
         rows = [header]
         for item in incidents:
-            target = (item.get("target") or "")[:60]
+            is_high = (item.get("risk_score", 0) or 0) >= 60
+            target = (item.get("target") or "")[:160]
             rows.append([
                 str(item.get("id")),
                 item.get("timestamp", "—"),
                 item.get("vector", "—"),
-                target,
-                item.get("verdict", "—"),
+                _cell(target, styles["CellWrap"]),
+                _cell(item.get("verdict", "—"), styles["CellWrapHigh"] if is_high else styles["CellWrap"]),
                 f"{item.get('risk_score', 0)}/100",
             ])
 
@@ -275,8 +298,12 @@ def history_to_pdf(incidents: list, analyst: str = "No especificado") -> bytes:
         ]
         for i, item in enumerate(incidents, start=1):
             if (item.get("risk_score", 0) or 0) >= 60:
-                style_cmds.append(("TEXTCOLOR", (4, i), (5, i), RISK_HIGH))
-                style_cmds.append(("FONTNAME", (4, i), (5, i), "Helvetica-Bold"))
+                # La columna Veredicto (4) ya viene coloreada por su propio
+                # Paragraph (CellWrapHigh) — un comando TEXTCOLOR de Table no
+                # tiene efecto sobre una celda que es un flowable. Solo Score
+                # (5) sigue siendo texto plano, a esa sí la pinta esto.
+                style_cmds.append(("TEXTCOLOR", (5, i), (5, i), RISK_HIGH))
+                style_cmds.append(("FONTNAME", (5, i), (5, i), "Helvetica-Bold"))
         table.setStyle(TableStyle(style_cmds))
         story.append(table)
 
