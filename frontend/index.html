@@ -331,7 +331,9 @@
             </div>
           </div>
 
-          <button type="submit" class="scan-btn w-full py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-sm tracking-wider font-mono neon-glow-cyan transition flex items-center justify-center gap-2">
+          <div id="login-error" class="hidden text-xs font-mono text-rose-400 bg-rose-950/40 border border-rose-800 rounded-lg px-3 py-2"></div>
+
+          <button id="btn-login" type="submit" class="scan-btn w-full py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-sm tracking-wider font-mono neon-glow-cyan transition flex items-center justify-center gap-2">
             <i class="fa-solid fa-fingerprint"></i> INICIALIZAR SESIÓN
           </button>
         </form>
@@ -503,12 +505,13 @@
       <form onsubmit="saveNewPass(event)" class="space-y-3 font-mono text-xs">
         <div>
           <label class="block text-[11px] text-slate-400 mb-1">Clave Actual</label>
-          <input type="password" required class="w-full rounded p-2 text-white">
+          <input id="pass-current" type="password" required class="w-full rounded p-2 text-white">
         </div>
         <div>
-          <label class="block text-[11px] text-slate-400 mb-1">Nueva Clave</label>
-          <input type="password" required class="w-full rounded p-2 text-white">
+          <label class="block text-[11px] text-slate-400 mb-1">Nueva Clave (mínimo 6 caracteres)</label>
+          <input id="pass-new" type="password" required minlength="6" class="w-full rounded p-2 text-white">
         </div>
+        <div id="pass-feedback" class="hidden text-[11px] rounded px-2 py-1.5"></div>
         <button type="submit" class="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold rounded transition neon-glow-cyan">Actualizar Clave</button>
       </form>
     </div>
@@ -544,6 +547,95 @@
   <script>
     const API_BASE = '';
     let currentRole = 'Administrador';
+    let authToken = null;
+
+    /* ===================================================== */
+    /* Autenticación real (JWT contra el backend)             */
+    /* ===================================================== */
+    const ROLE_LABELS = { admin: 'Administrador', analista: 'Analista OSINT', viewer: 'Visualizador' };
+
+    function authFetch(url, options = {}) {
+      const headers = Object.assign({}, options.headers || {});
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+      return fetch(url, Object.assign({}, options, { headers })).then(response => {
+        if (response.status === 401) {
+          // Sesión inválida o expirada: forzar vuelta al login
+          doLogout();
+          throw new Error('Sesión expirada. Volvé a iniciar sesión.');
+        }
+        return response;
+      });
+    }
+
+    async function tryAutoLogin() {
+      const saved = localStorage.getItem('anzuelo_token');
+      if (!saved) return;
+      authToken = saved;
+      try {
+        const response = await fetch(`${API_BASE}/api/auth/me`, {
+          headers: { 'Authorization': `Bearer ${saved}` }
+        });
+        if (!response.ok) throw new Error('token inválido');
+        const data = await response.json();
+        currentRole = ROLE_LABELS[data.role] || data.role;
+        document.getElementById('view-login').classList.add('hidden');
+        document.getElementById('view-dashboard').classList.remove('hidden');
+        document.getElementById('badge-rol').innerText = currentRole;
+      } catch (err) {
+        authToken = null;
+        localStorage.removeItem('anzuelo_token');
+      }
+    }
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const errorBox = document.getElementById('login-error');
+      const btn = document.getElementById('btn-login');
+      errorBox.classList.add('hidden');
+      setScanning(btn, true, 'VERIFICANDO...');
+
+      try {
+        const response = await fetch(`${API_BASE}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('login-user').value,
+            password: document.getElementById('login-pass').value,
+          })
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          errorBox.innerText = data.detail || 'No se pudo iniciar sesión.';
+          errorBox.classList.remove('hidden');
+          return;
+        }
+
+        authToken = data.access_token;
+        localStorage.setItem('anzuelo_token', authToken);
+        currentRole = ROLE_LABELS[data.role] || data.role;
+
+        document.getElementById('view-login').classList.add('hidden');
+        document.getElementById('view-dashboard').classList.remove('hidden');
+        document.getElementById('badge-rol').innerText = currentRole;
+      } catch (err) {
+        errorBox.innerText = 'Error de red al intentar autenticar.';
+        errorBox.classList.remove('hidden');
+      } finally {
+        setScanning(btn, false);
+      }
+    }
+
+    function doLogout() {
+      authToken = null;
+      localStorage.removeItem('anzuelo_token');
+      document.getElementById('view-dashboard').classList.add('hidden');
+      document.getElementById('view-login').classList.remove('hidden');
+    }
+
+    function handleLogout() {
+      doLogout();
+    }
 
     /* ===================================================== */
     /* FONDO ANIMADO: nodos de red tipo mapa de ataques SOC   */
@@ -674,18 +766,6 @@
       }
     }
 
-    function handleLogin(e) {
-      e.preventDefault();
-      document.getElementById('view-login').classList.add('hidden');
-      document.getElementById('view-dashboard').classList.remove('hidden');
-      document.getElementById('badge-rol').innerText = currentRole;
-    }
-
-    function handleLogout() {
-      document.getElementById('view-dashboard').classList.add('hidden');
-      document.getElementById('view-login').classList.remove('hidden');
-    }
-
     function switchTab(tabId) {
       ['tab-email', 'tab-sms', 'tab-qr', 'tab-history'].forEach(id => {
         document.getElementById(id).classList.add('hidden');
@@ -699,12 +779,42 @@
       }
     }
 
-    function openPassModal() { document.getElementById('modal-pass').classList.remove('hidden'); }
+    function openPassModal() {
+      document.getElementById('pass-feedback').classList.add('hidden');
+      document.getElementById('modal-pass').classList.remove('hidden');
+    }
     function closePassModal() { document.getElementById('modal-pass').classList.add('hidden'); }
-    function saveNewPass(e) {
+
+    async function saveNewPass(e) {
       e.preventDefault();
-      alert('Contraseña actualizada correctamente.');
-      closePassModal();
+      const feedback = document.getElementById('pass-feedback');
+      const currentPass = document.getElementById('pass-current').value;
+      const newPass = document.getElementById('pass-new').value;
+
+      try {
+        const response = await authFetch(`${API_BASE}/api/auth/change-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ current_password: currentPass, new_password: newPass })
+        });
+        const data = await response.json();
+
+        feedback.classList.remove('hidden');
+        if (response.ok) {
+          feedback.className = 'text-[11px] rounded px-2 py-1.5 bg-emerald-950/60 border border-emerald-800 text-emerald-300';
+          feedback.innerText = 'Clave actualizada correctamente.';
+          document.getElementById('pass-current').value = '';
+          document.getElementById('pass-new').value = '';
+          setTimeout(closePassModal, 1200);
+        } else {
+          feedback.className = 'text-[11px] rounded px-2 py-1.5 bg-rose-950/60 border border-rose-800 text-rose-300';
+          feedback.innerText = data.detail || 'No se pudo actualizar la clave.';
+        }
+      } catch (err) {
+        feedback.classList.remove('hidden');
+        feedback.className = 'text-[11px] rounded px-2 py-1.5 bg-rose-950/60 border border-rose-800 text-rose-300';
+        feedback.innerText = 'Error de red al intentar actualizar la clave.';
+      }
     }
 
     /* ===================================================== */
@@ -794,7 +904,7 @@
       setScanning(btn, true, 'TRIAGE EN CURSO...');
 
       try {
-        const response = await fetch(`${API_BASE}/api/analyze/email`, {
+        const response = await authFetch(`${API_BASE}/api/analyze/email`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ raw_headers: rawHeaders })
@@ -835,7 +945,7 @@
       setScanning(btn, true, 'ANALIZANDO...');
 
       try {
-        const response = await fetch(`${API_BASE}/api/analyze/sms`, {
+        const response = await authFetch(`${API_BASE}/api/analyze/sms`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message: message })
@@ -873,7 +983,7 @@
       setScanning(btn, true, 'TRAZANDO...');
 
       try {
-        const response = await fetch(`${API_BASE}/api/analyze/url`, {
+        const response = await authFetch(`${API_BASE}/api/analyze/url`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url: url })
@@ -916,7 +1026,7 @@
       setScanning(btn, true, 'DECODIFICANDO...');
 
       try {
-        const response = await fetch(`${API_BASE}/api/analyze/qr-image`, {
+        const response = await authFetch(`${API_BASE}/api/analyze/qr-image`, {
           method: 'POST',
           body: formData
         });
@@ -966,7 +1076,7 @@
       tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-cyan-400 font-mono"><i class="fa-solid fa-spinner fa-spin"></i> Leyendo base de datos SQLite...</td></tr>';
 
       try {
-        const response = await fetch(`${API_BASE}/api/history`);
+        const response = await authFetch(`${API_BASE}/api/history`);
         const items = await response.json();
 
         if (!items.length) {
@@ -1016,7 +1126,7 @@
 
     async function downloadFromEndpoint(url, fallbackFilename) {
       try {
-        const response = await fetch(url);
+        const response = await authFetch(url);
         if (!response.ok) {
           const errBody = await response.json().catch(() => ({}));
           alert(`Error al exportar: ${errBody.detail || response.statusText}`);
@@ -1062,12 +1172,19 @@
     async function clearHistory() {
       if (!confirm('¿Estás seguro de que querés vaciar todos los registros del historial?')) return;
       try {
-        await fetch(`${API_BASE}/api/history`, { method: 'DELETE' });
+        const response = await authFetch(`${API_BASE}/api/history`, { method: 'DELETE' });
+        if (response.status === 403) {
+          alert('Esta acción requiere rol de Administrador.');
+          return;
+        }
         loadHistory();
       } catch (err) {
         alert('Error al intentar vaciar la base de datos.');
       }
     }
+
+    // Si ya había una sesión JWT válida guardada (ej. recarga de página), saltear el login
+    tryAutoLogin();
   </script>
 </body>
 </html>

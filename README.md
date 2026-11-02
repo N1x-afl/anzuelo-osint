@@ -18,6 +18,7 @@ Plataforma unificada de respuesta preliminar y análisis forense rápido frente 
 - **Threat Intelligence Externo (opcional):** Enriquecimiento de dominios, URLs e IPs contra VirusTotal, AbuseIPDB y URLhaus — ver sección dedicada más abajo.
 - **Persistencia Local con SQLite:** Registro de auditoría integrado para trazabilidad de incidentes sin dependencias de bases de datos externas.
 - **Exportación de Evidencia (CSV / PDF forense):** Historial completo a CSV, informe PDF resumen de todos los incidentes, o informe PDF individual por incidente con hash SHA-256 de integridad (cadena de custodia) — ver sección dedicada más abajo.
+- **Autenticación Real + Rate Limiting:** Login respaldado por backend (bcrypt + JWT), roles (admin/analista/viewer) y límite de intentos para frenar fuerza bruta — ver sección dedicada más abajo.
 - **Arquitectura de Proceso Único:** Backend en FastAPI y Frontend (HTML/Tailwind CSS) servidos bajo el mismo socket y proceso, accesible localmente o mediante la IP física de la LAN.
 - **Interfaz táctica tipo SOC:** fondo de red animado (nodos conectados sobre Canvas), barrido de radar, esquinas HUD en los paneles y estados de "escaneo" en los botones de acción.
 
@@ -52,6 +53,7 @@ Plataforma unificada de respuesta preliminar y análisis forense rápido frente 
 - **Resolución Forense de Red:** `dnspython`, `requests`, `socket`
 - **Threat Intelligence:** VirusTotal API v3, AbuseIPDB API v2, URLhaus API (abuse.ch), WHOIS (`python-whois`) — vía `backend/services/threat_intel.py`, configurables por `.env` (`python-dotenv`)
 - **Exportación de Evidencia:** `reportlab` (PDF forense con hash de integridad) y `csv` (stdlib) — vía `backend/services/report_export.py`
+- **Autenticación:** `PyJWT`, `bcrypt`, `slowapi` (rate limiting) — vía `backend/services/auth.py`
 - **Almacenamiento:** SQLite3 (`anzuelo.db`, local — no versionado en git)
 - **Sistema Operativo Base:** CachyOS / Arch Linux
 
@@ -143,21 +145,32 @@ Los tres se generan localmente con `reportlab` — sin llamadas a servicios exte
 
 ---
 
-## ⚠️ Notas de Seguridad (leer antes de exponerlo fuera de tu red local)
+## 🔐 Autenticación
+
+Desde esta versión, el login es **autenticación real del lado del backend**, no una puerta de entrada de frontend:
+
+- Claves guardadas con **bcrypt** (nunca en texto plano) en una tabla `users` dentro de `anzuelo.db`.
+- Sesión vía **JWT firmado** (`Authorization: Bearer <token>`), expira a las 8hs por defecto (`ANZUELO_JWT_EXPIRE_MINUTES` en `.env`).
+- Todos los endpoints de análisis, historial y export requieren sesión válida; vaciar el historial (`DELETE /api/history`) requiere además rol **admin**.
+- **Rate limiting** (vía `slowapi`) en login y cambio de clave: 5 intentos/minuto por IP, para frenar fuerza bruta. Los endpoints de análisis están limitados a 20 req/minuto.
+- Podés cambiar tu clave desde la UI (botón "Clave" en el header) una vez logueado.
+
+La tabla `users` se siembra automáticamente la primera vez que corre `init_db()`, con los mismos 3 perfiles demo que ya conocías — pero ahora son usuarios reales validados en el backend, no un hardcode del frontend:
+
+| Perfil | Usuario | Clave inicial |
+|---|---|---|
+| Admin | `admin` | `admin123` |
+| Analista OSINT | `analista` | `analista123` |
+| Visualizador | `viewer` | `viewer123` |
+
+**Recomendado si vas a usarlo más allá de pruebas locales:** cambiá estas 3 claves apenas lo levantes (botón "Clave"), y fijá un `ANZUELO_JWT_SECRET` propio en `.env` — si no lo configurás, se genera uno aleatorio en cada arranque del backend, lo que invalida todas las sesiones activas cada vez que reiniciás el proceso.
+
+## ⚠️ Otras Notas de Seguridad (leer antes de exponerlo fuera de tu red local)
 
 Anzuelo está pensado para uso personal/homelab, no como servicio expuesto a internet sin revisión adicional:
 
-- **El login es una puerta de entrada de frontend, no autenticación real.** Los perfiles rápidos están hardcodeados en el JavaScript del cliente y no hay validación de credenciales en el backend — cualquiera que acceda a la página puede "entrar" sin clave real. Sirve para separar vistas/roles visualmente, no como control de acceso. Credenciales demo (botones "Perfiles Rápidos" en el login):
-
-  | Perfil | Usuario | Clave |
-  |---|---|---|
-  | Admin | `admin` | `admin123` |
-  | Analista OSINT | `analista` | `analista123` |
-  | Visualizador | `viewer` | `viewer123` |
-
-  Si lo exponés más allá de tu propio uso, cambiá estas credenciales en `frontend/index.html` (función `setCredentials`) o, mejor, implementá autenticación real en el backend antes de hacerlo.
 - **CORS está abierto a cualquier origen** (`allow_origins=["*"]`) en `backend/main.py`, pensado para desarrollo local y acceso LAN. Si lo exponés más allá de tu red de confianza, restringilo a los orígenes que realmente necesites.
-- **`anzuelo.db` queda en tu máquina y no se sube al repo** (está en `.gitignore`), ya que acumula el historial real de incidentes/correos/SMS que analices.
+- **`anzuelo.db` queda en tu máquina y no se sube al repo** (está en `.gitignore`), ya que acumula el historial real de incidentes/correos/SMS que analices — y ahora también las claves (hasheadas) de los usuarios.
 
 ---
 
