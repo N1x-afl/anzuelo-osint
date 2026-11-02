@@ -102,7 +102,11 @@ def change_password(
 ):
     user = get_user_by_username(current_user["username"])
     if not user or not auth.verify_password(payload.current_password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="La clave actual no es correcta.")
+        # 400 y no 401: la sesión (JWT) es válida, lo que está mal es el dato
+        # "clave actual" del formulario. Si fuera 401, el frontend lo
+        # interpretaría como "sesión expirada" y forzaría un logout en vez de
+        # mostrar este mensaje.
+        raise HTTPException(status_code=400, detail="La clave actual no es correcta.")
     if len(payload.new_password) < 6:
         raise HTTPException(status_code=400, detail="La nueva clave debe tener al menos 6 caracteres.")
     new_hash = auth.hash_password(payload.new_password)

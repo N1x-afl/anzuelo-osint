@@ -99,7 +99,9 @@ def test_change_password_wrong_current_password(client, admin_token):
         headers=auth_headers(admin_token),
         json={"current_password": "no-es-esta", "new_password": "nuevaClaveSegura456"},
     )
-    assert resp.status_code == 401
+    # 400 (clave actual incorrecta), no 401: el JWT es válido, no se trata
+    # de una sesión inválida/expirada.
+    assert resp.status_code == 400
 
 
 def test_change_password_too_short_is_rejected(client, admin_token):
