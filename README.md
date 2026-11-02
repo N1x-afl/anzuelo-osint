@@ -111,7 +111,7 @@ Además del análisis heurístico local (SPF/DMARC, patrones de SMS, cadena de r
 |---|---|---|---|
 | [VirusTotal](https://www.virustotal.com/gui/join-us) | Reputación de dominio y de URL (cuántos motores antivirus la marcan) | Sí | ~4 req/min |
 | [AbuseIPDB](https://www.abuseipdb.com/register) | Score de abuso de la IP resuelta (0-100) | Sí | 1000 req/día |
-| [URLhaus](https://urlhaus.abuse.ch/) (abuse.ch) | Si la URL está en su base pública de malware/phishing | No | Sin límite publicado |
+| [URLhaus](https://urlhaus.abuse.ch/) (abuse.ch) | Si la URL está en su base pública de malware/phishing | Sí (desde 2025) | Gratuita, [auth.abuse.ch](https://auth.abuse.ch/) |
 | WHOIS | Edad del dominio (días desde su registro) y registrador — un dominio recién creado es una señal fuerte de phishing | No | Protocolo público (puerto 43) |
 
 **La app funciona igual sin ninguna key configurada** — cada fuente no configurada se muestra como "no disponible" en el resultado y no afecta el resto del análisis.

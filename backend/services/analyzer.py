@@ -120,7 +120,7 @@ class ForensicAnalyzer:
         urls = re.findall(r'(https?://[^\s]+)', text)
         urgency_score = min(len(matched_triggers) * 25, 100)
 
-        # Threat Intelligence: el primer link del mensaje contra URLhaus (sin API key)
+        # Threat Intelligence: el primer link del mensaje contra URLhaus
         ti_urlhaus = threat_intel.check_url_urlhaus(urls[0]) if urls else {"available": False, "reason": "Sin URLs en el mensaje."}
         if ti_urlhaus.get("found"):
             urgency_score = min(urgency_score + 40, 100)

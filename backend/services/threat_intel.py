@@ -8,7 +8,9 @@ Todas las funciones son best-effort y degradan de forma elegante:
   propagar el error hacia arriba.
 
 VirusTotal y AbuseIPDB requieren API key propia (gratuitas, ver README).
-URLhaus (abuse.ch) y WHOIS son públicas y no requieren key.
+WHOIS es pública y no requiere key. URLhaus (abuse.ch) requiere, desde 2025,
+un Auth-Key gratuito registrado en https://auth.abuse.ch/ (antes era abierta
+sin autenticación — abuse.ch migró todas sus APIs a este esquema).
 """
 
 import os
@@ -19,6 +21,7 @@ import whois as whois_lib
 
 VT_API_KEY = os.getenv("VIRUSTOTAL_API_KEY", "").strip()
 ABUSEIPDB_API_KEY = os.getenv("ABUSEIPDB_API_KEY", "").strip()
+ABUSECH_AUTH_KEY = os.getenv("ABUSECH_AUTH_KEY", "").strip()
 
 VT_BASE = "https://www.virustotal.com/api/v3"
 ABUSEIPDB_BASE = "https://api.abuseipdb.com/api/v2"
@@ -127,16 +130,28 @@ def check_ip_abuseipdb(ip: str) -> dict:
 
 
 def check_url_urlhaus(url: str) -> dict:
-    """Consulta si la URL está en la base pública de malware/phishing de URLhaus (abuse.ch). No requiere API key."""
+    """Consulta si la URL está en la base pública de malware/phishing de URLhaus (abuse.ch).
+
+    Desde 2025, abuse.ch requiere un Auth-Key gratuito (https://auth.abuse.ch/)
+    en todas sus APIs, incluida URLhaus — sin él, la consulta devuelve 401.
+    """
     if not url:
         return _unavailable("Sin URL para consultar.")
+    if not ABUSECH_AUTH_KEY:
+        return _unavailable(
+            "ABUSECH_AUTH_KEY no configurada — desde 2025 abuse.ch requiere un "
+            "Auth-Key gratuito (ver .env.example)."
+        )
 
     try:
         resp = requests.post(
             f"{URLHAUS_BASE}/url/",
             data={"url": url},
+            headers={"Auth-Key": ABUSECH_AUTH_KEY},
             timeout=TIMEOUT,
         )
+        if resp.status_code == 401:
+            return _unavailable("Auth-Key de abuse.ch inválida o expirada.")
         resp.raise_for_status()
         data = resp.json()
 
