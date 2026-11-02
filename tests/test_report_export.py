@@ -77,6 +77,19 @@ def test_history_to_pdf_empty_list_does_not_crash():
     assert pdf_bytes.startswith(b"%PDF")
 
 
+def test_pdf_export_does_not_crash_on_malformed_markup_in_analyst():
+    """'analyst' llega de un query param que el usuario escribe libremente, y
+    Paragraph() de reportlab interpreta un subconjunto de markup tipo XML —
+    sin escapar, un tag sin cerrar como "<broken" tira un ValueError no
+    capturado (500) en los 3 endpoints de export. Debe degradar mostrando el
+    texto literal, no romper la generación del PDF."""
+    pdf_bytes = report_export.history_to_pdf(_SAMPLE_INCIDENTS, analyst="<broken")
+    assert pdf_bytes.startswith(b"%PDF")
+
+    pdf_bytes = report_export.incident_to_pdf(_SAMPLE_INCIDENTS[0], analyst="<script>alert(1)</script>")
+    assert pdf_bytes.startswith(b"%PDF")
+
+
 def test_flatten_handles_nested_threat_intel():
     flat = dict(report_export._flatten(_SAMPLE_INCIDENTS[0]["details"]))
     assert flat["threat_intel.whois_domain.age_days"] == "12"

@@ -36,10 +36,18 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# allow_origins=["*"] es intencional: Anzuelo se accede desde distintas IPs
+# de la LAN (localhost, la IP física del host, etc.) sin un origen fijo, y
+# esto es un homelab, no un servicio multi-tenant. Pero allow_credentials
+# debe ser False: la autenticación es 100% vía header "Authorization: Bearer
+# <token>" armado a mano en el frontend (ver authFetch en frontend/index.html),
+# nunca cookies — así que no hay nada que "credentials" necesite habilitar
+# acá, y la combinación wildcard + credentials=True es además una que la
+# propia spec de CORS considera insegura (y los navegadores la rechazan).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -182,7 +190,8 @@ async def analyze_qr_image(request: Request, file: UploadFile = File(...), curre
 
 # Endpoints de Historial SQLite
 @app.get("/api/history")
-def get_history(current_user: dict = Depends(auth.get_current_user)):
+@limiter.limit("30/minute")
+def get_history(request: Request, current_user: dict = Depends(auth.get_current_user)):
     return get_recent_incidents(limit=50)
 
 @app.delete("/api/history")
@@ -190,9 +199,13 @@ def clear_history(current_user: dict = Depends(auth.require_admin)):
     success = clear_all_incidents()
     return {"success": success}
 
-# Endpoints de Exportación de Evidencia (CSV / PDF forense)
+# Endpoints de Exportación de Evidencia (CSV / PDF forense). Rate limit más
+# bajo que el de /api/history porque generar el PDF (reportlab) consume CPU
+# en cada pedido — sin límite, cualquier usuario autenticado podía pedirlo
+# en loop y degradar el servicio para todos (DoS).
 @app.get("/api/export/csv")
-def export_csv(current_user: dict = Depends(auth.get_current_user)):
+@limiter.limit("15/minute")
+def export_csv(request: Request, current_user: dict = Depends(auth.get_current_user)):
     incidents = get_recent_incidents(limit=1000)
     csv_text = report_export.incidents_to_csv(incidents)
     return Response(
@@ -202,7 +215,8 @@ def export_csv(current_user: dict = Depends(auth.get_current_user)):
     )
 
 @app.get("/api/export/history/pdf")
-def export_history_pdf(analyst: str = "No especificado", current_user: dict = Depends(auth.get_current_user)):
+@limiter.limit("10/minute")
+def export_history_pdf(request: Request, analyst: str = "No especificado", current_user: dict = Depends(auth.get_current_user)):
     incidents = get_recent_incidents(limit=200)
     pdf_bytes = report_export.history_to_pdf(incidents, analyst=analyst)
     return Response(
@@ -212,7 +226,8 @@ def export_history_pdf(analyst: str = "No especificado", current_user: dict = De
     )
 
 @app.get("/api/export/incident/{incident_id}/pdf")
-def export_incident_pdf(incident_id: int, analyst: str = "No especificado", current_user: dict = Depends(auth.get_current_user)):
+@limiter.limit("10/minute")
+def export_incident_pdf(request: Request, incident_id: int, analyst: str = "No especificado", current_user: dict = Depends(auth.get_current_user)):
     incident = get_incident_by_id(incident_id)
     if not incident:
         raise HTTPException(status_code=404, detail=f"Incidente #{incident_id} no encontrado.")

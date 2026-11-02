@@ -191,6 +191,29 @@ def test_export_incident_pdf_found_returns_pdf(client, admin_token):
     assert resp.content.startswith(b"%PDF")
 
 
+def test_export_history_pdf_with_broken_analyst_param_does_not_500(client, admin_token):
+    """Antes del fix, ?analyst=<broken tiraba un 500 sin capturar porque
+    reportlab interpreta ese valor como markup XML sin cerrar."""
+    resp = client.get(
+        "/api/export/history/pdf?analyst=%3Cbroken",
+        headers=auth_headers(admin_token),
+    )
+    assert resp.status_code == 200
+    assert resp.content.startswith(b"%PDF")
+
+
+def test_export_endpoints_are_rate_limited(client, admin_token):
+    """/api/history y /api/export/* no tenían @limiter.limit, a diferencia de
+    login y los endpoints de análisis — un usuario autenticado de cualquier
+    rol podía pedir en loop la generación de PDFs (CPU) sin ningún freno."""
+    for _ in range(10):
+        resp = client.get("/api/export/history/pdf", headers=auth_headers(admin_token))
+        assert resp.status_code == 200
+
+    resp = client.get("/api/export/history/pdf", headers=auth_headers(admin_token))
+    assert resp.status_code == 429
+
+
 def test_health_endpoint_is_public(client):
     resp = client.get("/api/health")
     assert resp.status_code == 200

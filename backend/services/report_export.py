@@ -13,6 +13,7 @@ import hashlib
 import io
 import json
 from datetime import datetime, timezone
+from xml.sax.saxutils import escape as _xml_escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -106,13 +107,24 @@ def _base_styles():
 
 
 def _header_flowables(styles, title: str, analyst: str):
+    """
+    'analyst' llega de un query param (?analyst=...) que el usuario escribe
+    libremente, y Paragraph() interpreta un subconjunto de markup tipo XML
+    (<b>, <font>, etc.) — sin escapar, un valor como "?analyst=<broken"
+    tira un ValueError sin capturar (500) en cualquiera de los 3 endpoints
+    de export, con solo una sesión válida. 'title' siempre es texto fijo
+    generado acá mismo (nunca viene de afuera), pero se escapa igual por
+    las dudas de que eso cambie más adelante.
+    """
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    safe_title = _xml_escape(str(title))
+    safe_analyst = _xml_escape(str(analyst))
     flow = [
         Paragraph("ANZUELO · OSINT Phishing &amp; Social Engineering Triage", styles["AnzueloSubtitle"]),
-        Paragraph(title, styles["AnzueloTitle"]),
+        Paragraph(safe_title, styles["AnzueloTitle"]),
         HRFlowable(width="100%", thickness=1.2, color=BRAND_CYAN, spaceAfter=10),
         Paragraph(
-            f"<b>Analista / Exportado por:</b> {analyst}&nbsp;&nbsp;|&nbsp;&nbsp;"
+            f"<b>Analista / Exportado por:</b> {safe_analyst}&nbsp;&nbsp;|&nbsp;&nbsp;"
             f"<b>Fecha de exportación:</b> {now}",
             styles["Normal"],
         ),
