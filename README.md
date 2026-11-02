@@ -17,6 +17,7 @@ Plataforma unificada de respuesta preliminar y análisis forense rápido frente 
 - **Desempaquetador de QR & Trazado de Quishing:** Decodificación directa de matrices QR desde archivos de imagen (PNG, JPG, WEBP) o inspección manual de enlaces, con trazado de cadena de saltos y redirecciones HTTP hasta el destino final.
 - **Threat Intelligence Externo (opcional):** Enriquecimiento de dominios, URLs e IPs contra VirusTotal, AbuseIPDB y URLhaus — ver sección dedicada más abajo.
 - **Persistencia Local con SQLite:** Registro de auditoría integrado para trazabilidad de incidentes sin dependencias de bases de datos externas.
+- **Exportación de Evidencia (CSV / PDF forense):** Historial completo a CSV, informe PDF resumen de todos los incidentes, o informe PDF individual por incidente con hash SHA-256 de integridad (cadena de custodia) — ver sección dedicada más abajo.
 - **Arquitectura de Proceso Único:** Backend en FastAPI y Frontend (HTML/Tailwind CSS) servidos bajo el mismo socket y proceso, accesible localmente o mediante la IP física de la LAN.
 - **Interfaz táctica tipo SOC:** fondo de red animado (nodos conectados sobre Canvas), barrido de radar, esquinas HUD en los paneles y estados de "escaneo" en los botones de acción.
 
@@ -50,6 +51,7 @@ Plataforma unificada de respuesta preliminar y análisis forense rápido frente 
 - **Procesamiento de Imágenes & Códigos:** `Pillow`, `pyzbar` (librería nativa `zbar`)
 - **Resolución Forense de Red:** `dnspython`, `requests`, `socket`
 - **Threat Intelligence:** VirusTotal API v3, AbuseIPDB API v2, URLhaus API (abuse.ch), WHOIS (`python-whois`) — vía `backend/services/threat_intel.py`, configurables por `.env` (`python-dotenv`)
+- **Exportación de Evidencia:** `reportlab` (PDF forense con hash de integridad) y `csv` (stdlib) — vía `backend/services/report_export.py`
 - **Almacenamiento:** SQLite3 (`anzuelo.db`, local — no versionado en git)
 - **Sistema Operativo Base:** CachyOS / Arch Linux
 
@@ -122,6 +124,22 @@ cp .env.example .env
 ```
 
 El `risk_score` de cada vector (Email, URL, QR) incorpora estas señales cuando están disponibles: un dominio/URL marcado como malicioso en VirusTotal, una IP con score alto en AbuseIPDB, o una URL encontrada en URLhaus suman directamente al puntaje de riesgo.
+
+---
+
+## 📄 Exportación de Evidencia (CSV / PDF)
+
+Pensado para quien necesite anexar el triage a un reporte de incidente, un ticket, o un expediente con requisitos de trazabilidad (p. ej. ISO 27001:2022, control A.5.25 "Evaluación y decisión sobre eventos de seguridad de la información"):
+
+| Export | Endpoint | Contenido |
+|---|---|---|
+| CSV del historial completo | `GET /api/export/csv` | Todas las filas del historial, con columna de hash SHA-256 por registro |
+| PDF resumen del historial | `GET /api/export/history/pdf?analyst=<nombre>` | Tabla de todos los incidentes, con el perfil que lo exportó |
+| PDF de un incidente puntual | `GET /api/export/incident/{id}/pdf?analyst=<nombre>` | Informe forense completo: resumen, detalle técnico (incluye Threat Intelligence) y **hash SHA-256 de integridad** |
+
+El hash de integridad se calcula sobre el JSON canónico del incidente tal como quedó guardado en SQLite — permite verificar más adelante que el PDF exportado no fue alterado respecto al registro original (cadena de custodia básica).
+
+Los tres se generan localmente con `reportlab` — sin llamadas a servicios externos. Disponibles desde la pestaña **Historial SQLite** (botones "Exportar CSV" / "Exportar PDF") y desde el inspector de detalle de cada incidente ("Exportar Informe PDF").
 
 ---
 
