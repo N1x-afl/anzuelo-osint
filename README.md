@@ -103,7 +103,15 @@ Por defecto el servicio queda escuchando en `0.0.0.0:8001` — accesible desde `
 
 Anzuelo está pensado para uso personal/homelab, no como servicio expuesto a internet sin revisión adicional:
 
-- **El login es una puerta de entrada de frontend, no autenticación real.** Los perfiles rápidos (`admin`/`admin123`, etc.) están hardcodeados en el JavaScript del cliente y no hay validación de credenciales en el backend — cualquiera que acceda a la página puede "entrar" sin clave real. Sirve para separar vistas/roles visualmente, no como control de acceso.
+- **El login es una puerta de entrada de frontend, no autenticación real.** Los perfiles rápidos están hardcodeados en el JavaScript del cliente y no hay validación de credenciales en el backend — cualquiera que acceda a la página puede "entrar" sin clave real. Sirve para separar vistas/roles visualmente, no como control de acceso. Credenciales demo (botones "Perfiles Rápidos" en el login):
+
+  | Perfil | Usuario | Clave |
+  |---|---|---|
+  | Admin | `admin` | `admin123` |
+  | Analista OSINT | `analista` | `analista123` |
+  | Visualizador | `viewer` | `viewer123` |
+
+  Si lo exponés más allá de tu propio uso, cambiá estas credenciales en `frontend/index.html` (función `setCredentials`) o, mejor, implementá autenticación real en el backend antes de hacerlo.
 - **CORS está abierto a cualquier origen** (`allow_origins=["*"]`) en `backend/main.py`, pensado para desarrollo local y acceso LAN. Si lo exponés más allá de tu red de confianza, restringilo a los orígenes que realmente necesites.
 - **`anzuelo.db` queda en tu máquina y no se sube al repo** (está en `.gitignore`), ya que acumula el historial real de incidentes/correos/SMS que analices.
 
