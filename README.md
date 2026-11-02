@@ -15,6 +15,7 @@ Plataforma unificada de respuesta preliminar y análisis forense rápido frente 
 - **Análisis Forense de Cabeceras RFC 822 (Email):** Extracción de remitente, saltos SMTP (`Received`) y resolución activa de registros DNS para validación de políticas **SPF**, **DKIM** y **DMARC**.
 - **Heurística de Smishing (SMS):** Evaluación de patrones lingüísticos y disparadores de coerción/urgencia con extracción automática de URLs objetivos.
 - **Desempaquetador de QR & Trazado de Quishing:** Decodificación directa de matrices QR desde archivos de imagen (PNG, JPG, WEBP) o inspección manual de enlaces, con trazado de cadena de saltos y redirecciones HTTP hasta el destino final.
+- **Threat Intelligence Externo (opcional):** Enriquecimiento de dominios, URLs e IPs contra VirusTotal, AbuseIPDB y URLhaus — ver sección dedicada más abajo.
 - **Persistencia Local con SQLite:** Registro de auditoría integrado para trazabilidad de incidentes sin dependencias de bases de datos externas.
 - **Arquitectura de Proceso Único:** Backend en FastAPI y Frontend (HTML/Tailwind CSS) servidos bajo el mismo socket y proceso, accesible localmente o mediante la IP física de la LAN.
 - **Interfaz táctica tipo SOC:** fondo de red animado (nodos conectados sobre Canvas), barrido de radar, esquinas HUD en los paneles y estados de "escaneo" en los botones de acción.
@@ -48,6 +49,7 @@ Plataforma unificada de respuesta preliminar y análisis forense rápido frente 
 - **Frontend:** HTML5 semántico + Tailwind CSS (CDN) + FontAwesome (CDN)
 - **Procesamiento de Imágenes & Códigos:** `Pillow`, `pyzbar` (librería nativa `zbar`)
 - **Resolución Forense de Red:** `dnspython`, `requests`, `socket`
+- **Threat Intelligence:** VirusTotal API v3, AbuseIPDB API v2, URLhaus API (abuse.ch) — vía `backend/services/threat_intel.py`, configurables por `.env` (`python-dotenv`)
 - **Almacenamiento:** SQLite3 (`anzuelo.db`, local — no versionado en git)
 - **Sistema Operativo Base:** CachyOS / Arch Linux
 
@@ -96,6 +98,29 @@ chmod +x run.sh
 ```
 
 Por defecto el servicio queda escuchando en `0.0.0.0:8001` — accesible desde `http://localhost:8001` y desde cualquier equipo de la misma LAN por la IP física del host.
+
+---
+
+## 🔍 Threat Intelligence (opcional)
+
+Además del análisis heurístico local (SPF/DMARC, patrones de SMS, cadena de redirecciones), Anzuelo puede enriquecer cada triage consultando fuentes externas de reputación:
+
+| Fuente | Qué consulta | Requiere API key | Plan gratuito |
+|---|---|---|---|
+| [VirusTotal](https://www.virustotal.com/gui/join-us) | Reputación de dominio y de URL (cuántos motores antivirus la marcan) | Sí | ~4 req/min |
+| [AbuseIPDB](https://www.abuseipdb.com/register) | Score de abuso de la IP resuelta (0-100) | Sí | 1000 req/día |
+| [URLhaus](https://urlhaus.abuse.ch/) (abuse.ch) | Si la URL está en su base pública de malware/phishing | No | Sin límite publicado |
+
+**La app funciona igual sin ninguna key configurada** — cada fuente no configurada se muestra como "no disponible" en el resultado y no afecta el resto del análisis.
+
+Para activarlas:
+
+```bash
+cp .env.example .env
+# Editá .env y completá las keys que tengas
+```
+
+El `risk_score` de cada vector (Email, URL, QR) incorpora estas señales cuando están disponibles: un dominio/URL marcado como malicioso en VirusTotal, una IP con score alto en AbuseIPDB, o una URL encontrada en URLhaus suman directamente al puntaje de riesgo.
 
 ---
 

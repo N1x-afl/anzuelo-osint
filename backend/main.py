@@ -1,4 +1,11 @@
+import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Cargar variables de entorno (.env) antes de importar servicios que las leen
+# (ej. backend/services/threat_intel.py lee VIRUSTOTAL_API_KEY / ABUSEIPDB_API_KEY al importarse)
+load_dotenv()
+
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -38,7 +45,12 @@ def health():
     return {
         "status": "online",
         "service": "Anzuelo OSINT Core Engine",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "threat_intel": {
+            "virustotal_configured": bool(os.getenv("VIRUSTOTAL_API_KEY", "").strip()),
+            "abuseipdb_configured": bool(os.getenv("ABUSEIPDB_API_KEY", "").strip()),
+            "urlhaus_configured": True  # no requiere API key
+        }
     }
 
 @app.post("/api/analyze/email")
@@ -77,8 +89,8 @@ def analyze_url(payload: URLPayload):
     save_incident(
         vector="URL / Redirección",
         target=payload.url,
-        verdict=f"Resuelto ({res.get('status_code', 'ERR')}) - {res.get('total_redirects', 0)} saltos",
-        risk_score=50 if res.get("total_redirects", 0) > 1 else 10,
+        verdict=res.get("verdict", "Evaluado"),
+        risk_score=res.get("risk_score", 0),
         details=res
     )
     return res
@@ -90,11 +102,12 @@ async def analyze_qr_image(file: UploadFile = File(...)):
         return {"success": False, "error": "El archivo subido está vacío."}
     res = ForensicAnalyzer.decode_and_analyze_qr_image(contents)
     if res.get("success"):
+        url_analysis = res.get("url_analysis") or {}
         save_incident(
             vector="QR / Quishing",
             target=res.get("payload", "")[:120],
-            verdict=f"Tipo: {res.get('type')}",
-            risk_score=75 if res.get("is_url") else 10,
+            verdict=url_analysis.get("verdict", f"Tipo: {res.get('type')}"),
+            risk_score=url_analysis.get("risk_score", 75 if res.get("is_url") else 10),
             details=res
         )
     return res

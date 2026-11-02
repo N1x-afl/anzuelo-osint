@@ -9,6 +9,8 @@ from pyzbar.pyzbar import decode as decode_qr
 import dns.resolver
 import requests
 
+from backend.services import threat_intel
+
 class ForensicAnalyzer:
 
     @staticmethod
@@ -69,6 +71,16 @@ class ForensicAnalyzer:
         if not mx_records:
             risk_score += 20
 
+        # Threat Intelligence: reputación del dominio del remitente en VirusTotal
+        ti_domain = threat_intel.check_domain_virustotal(domain)
+        if ti_domain.get("found"):
+            if ti_domain.get("malicious", 0) > 0:
+                risk_score += 50
+            elif ti_domain.get("suspicious", 0) > 0:
+                risk_score += 20
+
+        risk_score = min(risk_score, 100)
+
         return {
             "from": from_header,
             "to": to_header,
@@ -79,8 +91,11 @@ class ForensicAnalyzer:
             "spf": spf_status,
             "dmarc": dmarc_status,
             "mx_records": mx_records,
-            "risk_score": min(risk_score, 100),
-            "verdict": "Alto Riesgo (Spoofing probable)" if risk_score >= 60 else "Bajo Riesgo / Alineado"
+            "risk_score": risk_score,
+            "verdict": "Alto Riesgo (Spoofing probable)" if risk_score >= 60 else "Bajo Riesgo / Alineado",
+            "threat_intel": {
+                "virustotal_domain": ti_domain
+            }
         }
 
     @staticmethod
@@ -95,12 +110,26 @@ class ForensicAnalyzer:
         urls = re.findall(r'(https?://[^\s]+)', text)
         urgency_score = min(len(matched_triggers) * 25, 100)
 
+        # Threat Intelligence: el primer link del mensaje contra URLhaus (sin API key)
+        ti_urlhaus = threat_intel.check_url_urlhaus(urls[0]) if urls else {"available": False, "reason": "Sin URLs en el mensaje."}
+        if ti_urlhaus.get("found"):
+            urgency_score = min(urgency_score + 40, 100)
+
+        is_smishing_probable = (
+            urgency_score >= 50
+            or (len(urls) > 0 and urgency_score >= 25)
+            or ti_urlhaus.get("found", False)
+        )
+
         return {
             "text": text,
             "urgency_score": urgency_score,
             "matched_triggers": matched_triggers,
             "extracted_urls": urls,
-            "is_smishing_probable": urgency_score >= 50 or (len(urls) > 0 and urgency_score >= 25)
+            "is_smishing_probable": is_smishing_probable,
+            "threat_intel": {
+                "urlhaus_first_url": ti_urlhaus
+            }
         }
 
     @staticmethod
@@ -135,6 +164,31 @@ class ForensicAnalyzer:
         except Exception as e:
             hops.append({"error": str(e)})
 
+        # Threat Intelligence: URL final en VirusTotal/URLhaus, IP resuelta en AbuseIPDB
+        ti_vt_url = threat_intel.check_url_virustotal(final_url)
+        ti_urlhaus = threat_intel.check_url_urlhaus(final_url)
+        ti_abuseipdb = threat_intel.check_ip_abuseipdb(resolved_ip)
+
+        risk_score = 0
+        if len(hops) > 1:
+            risk_score += 20
+        if resolved_ip in ("No resoluble", ""):
+            risk_score += 15
+        if ti_vt_url.get("found"):
+            if ti_vt_url.get("malicious", 0) > 0:
+                risk_score += 50
+            elif ti_vt_url.get("suspicious", 0) > 0:
+                risk_score += 20
+        if ti_urlhaus.get("found"):
+            risk_score += 60
+        if ti_abuseipdb.get("found"):
+            score = ti_abuseipdb.get("abuse_confidence_score", 0) or 0
+            if score >= 50:
+                risk_score += 30
+            elif score >= 20:
+                risk_score += 15
+        risk_score = min(risk_score, 100)
+
         return {
             "initial_url": target_url,
             "final_url": final_url,
@@ -142,7 +196,14 @@ class ForensicAnalyzer:
             "resolved_ip": resolved_ip,
             "status_code": status_code,
             "total_redirects": len(hops),
-            "hops_chain": hops
+            "hops_chain": hops,
+            "risk_score": risk_score,
+            "verdict": "Alto Riesgo (URL maliciosa o IP comprometida)" if risk_score >= 60 else "Bajo Riesgo / Sin coincidencias",
+            "threat_intel": {
+                "virustotal_url": ti_vt_url,
+                "urlhaus": ti_urlhaus,
+                "abuseipdb_ip": ti_abuseipdb
+            }
         }
 
     @staticmethod

@@ -698,6 +698,68 @@
       closePassModal();
     }
 
+    /* ===================================================== */
+    /* Threat Intelligence: renderizado genérico de resultados */
+    /* ===================================================== */
+    const TI_LABELS = {
+      virustotal_domain: 'VirusTotal (dominio)',
+      virustotal_url: 'VirusTotal (URL)',
+      abuseipdb_ip: 'AbuseIPDB (IP)',
+      urlhaus: 'URLhaus (abuse.ch)',
+      urlhaus_first_url: 'URLhaus (primer link)'
+    };
+
+    function renderThreatIntelBlock(ti) {
+      if (!ti || !Object.keys(ti).length) return '';
+
+      const rows = Object.entries(ti).map(([key, v]) => {
+        const label = TI_LABELS[key] || key;
+        let statusHtml = '';
+        let detailHtml = '';
+
+        if (!v || v.available === false) {
+          statusHtml = `<span class="text-slate-500">no disponible</span>`;
+          detailHtml = `<div class="text-slate-600 text-[10px]">${(v && v.reason) || ''}</div>`;
+        } else if (v.found === false) {
+          statusHtml = `<span class="text-emerald-400">✓ sin coincidencias</span>`;
+        } else if ('malicious' in v) {
+          const mal = v.malicious || 0;
+          const susp = v.suspicious || 0;
+          const total = v.total_engines || 0;
+          const bad = mal > 0 || susp > 0;
+          statusHtml = `<span class="${bad ? 'text-rose-400 font-bold' : 'text-emerald-400'}">${mal}/${total} motores${susp ? `, ${susp} sospechosos` : ''}</span>`;
+        } else if ('abuse_confidence_score' in v) {
+          const score = v.abuse_confidence_score || 0;
+          const cls = score >= 50 ? 'text-rose-400 font-bold' : (score >= 20 ? 'text-amber-400' : 'text-emerald-400');
+          statusHtml = `<span class="${cls}">score ${score}/100 (${v.total_reports || 0} reportes)</span>`;
+        } else if ('threat' in v || 'url_status' in v) {
+          statusHtml = `<span class="text-rose-400 font-bold">⚠ en lista negra${v.threat ? ` (${v.threat})` : ''}</span>`;
+        } else {
+          statusHtml = `<span class="text-amber-400">encontrado</span>`;
+        }
+
+        if (v && v.permalink) {
+          detailHtml += `<div><a href="${v.permalink}" target="_blank" rel="noopener noreferrer" class="text-cyan-500 hover:text-cyan-300 text-[10px] underline">ver detalle ↗</a></div>`;
+        }
+
+        return `
+          <div class="flex items-start justify-between gap-3 py-1.5 border-b border-slate-800/60 last:border-0">
+            <span class="text-slate-400 shrink-0">${label}</span>
+            <span class="text-right">${statusHtml}${detailHtml}</span>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div class="mt-3 pt-3 border-t border-slate-800">
+          <div class="text-[11px] uppercase tracking-wider text-slate-500 mb-1.5 flex items-center gap-1.5">
+            <i class="fa-solid fa-satellite-dish"></i> Threat Intelligence
+          </div>
+          ${rows}
+        </div>
+      `;
+    }
+
     async function analyzeEmail() {
       const rawHeaders = document.getElementById('email-raw').value;
       const resDiv = document.getElementById('email-results');
@@ -730,6 +792,7 @@
           <div><span class="text-slate-400">SPF TXT:</span> <span class="${data.spf && data.spf.includes('DETECTED') ? 'text-emerald-400' : 'text-rose-400'}">${data.spf}</span></div>
           <div><span class="text-slate-400">DMARC TXT:</span> <span class="${data.dmarc && data.dmarc.includes('DETECTED') ? 'text-emerald-400' : 'text-rose-400'}">${data.dmarc}</span></div>
           <div><span class="text-slate-400">Servidores MX:</span> <span class="text-slate-300">${data.mx_records ? data.mx_records.join(', ') : 'Sin registros MX'}</span></div>
+          ${renderThreatIntelBlock(data.threat_intel)}
         `;
       } catch (err) {
         resDiv.innerHTML = `<div class="text-rose-400 font-mono"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend.</div>`;
@@ -767,6 +830,7 @@
           </div>
           <div><span class="text-slate-400">Disparadores detectados:</span> <span class="text-amber-400">${data.matched_triggers ? data.matched_triggers.join(', ') : 'Ninguno'}</span></div>
           <div><span class="text-slate-400">URLs en el mensaje:</span> <span class="text-cyan-400">${data.extracted_urls ? data.extracted_urls.join(', ') : 'Sin enlaces'}</span></div>
+          ${renderThreatIntelBlock(data.threat_intel)}
         `;
       } catch (err) {
         resDiv.innerHTML = `<div class="text-rose-400 font-mono"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend.</div>`;
@@ -796,14 +860,17 @@
         });
         const data = await response.json();
 
+        const isHighRiskUrl = (data.risk_score || 0) >= 60;
         resDiv.innerHTML = `
-          <div class="p-3 rounded-lg bg-slate-900 border border-amber-900 mb-2 font-mono text-xs">
-            <div class="text-cyan-400 font-bold">Host: ${data.hostname}</div>
+          <div class="p-3 rounded-lg ${isHighRiskUrl ? 'bg-rose-950/60 border border-rose-800 text-rose-300' : 'bg-slate-900 border border-amber-900'} mb-2 font-mono text-xs">
+            <div class="${isHighRiskUrl ? 'text-rose-300 font-bold' : 'text-cyan-400 font-bold'}">${data.verdict || ''} ${data.risk_score != null ? `(Score: ${data.risk_score}/100)` : ''}</div>
+            <div class="text-slate-400 mt-1">Host: <span class="text-white">${data.hostname}</span></div>
             <div class="text-slate-400">IP Resuelta: <span class="text-emerald-400">${data.resolved_ip}</span></div>
             <div class="text-slate-400">Código HTTP Final: <span class="text-white">${data.status_code || 'Error'}</span></div>
             <div class="text-slate-400">Total Redirecciones: <span class="text-amber-400">${data.total_redirects}</span></div>
           </div>
           <div class="text-slate-400 text-xs font-mono">Destino final: <span class="text-cyan-300 break-all">${data.final_url}</span></div>
+          ${renderThreatIntelBlock(data.threat_intel)}
         `;
       } catch (err) {
         resDiv.innerHTML = `<div class="text-rose-400 font-mono"><i class="fa-solid fa-triangle-exclamation"></i> Error al conectar con el backend.</div>`;
@@ -847,12 +914,15 @@
         let urlBlock = '';
         if (data.url_analysis) {
           const u = data.url_analysis;
+          const isHighRiskQr = (u.risk_score || 0) >= 60;
           urlBlock = `
-            <div class="p-3 mt-2 rounded-lg bg-slate-900 border border-amber-900 space-y-1 font-mono text-xs">
-              <div class="text-cyan-400 font-bold">Host: ${u.hostname}</div>
+            <div class="p-3 mt-2 rounded-lg ${isHighRiskQr ? 'bg-rose-950/60 border border-rose-800' : 'bg-slate-900 border border-amber-900'} space-y-1 font-mono text-xs">
+              <div class="${isHighRiskQr ? 'text-rose-300 font-bold' : 'text-cyan-400 font-bold'}">${u.verdict || ''} ${u.risk_score != null ? `(Score: ${u.risk_score}/100)` : ''}</div>
+              <div class="text-slate-400">Host: <span class="text-white">${u.hostname}</span></div>
               <div class="text-slate-400">IP Destino: <span class="text-emerald-400">${u.resolved_ip}</span></div>
               <div class="text-slate-400">Saltos HTTP: <span class="text-amber-400">${u.total_redirects}</span> | Código final: <span class="text-white">${u.status_code || 'N/A'}</span></div>
               <div class="text-slate-400">Destino final: <span class="text-cyan-300 break-all">${u.final_url}</span></div>
+              ${renderThreatIntelBlock(u.threat_intel)}
             </div>
           `;
         }
