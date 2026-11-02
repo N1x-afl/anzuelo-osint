@@ -1,0 +1,17 @@
+version: 2
+
+# Estas 3 "credenciales" son perfiles demo intencionales para el primer
+# arranque de Anzuelo (documentados en README.md, sección "Autenticación"),
+# nunca secretos reales: se guardan hasheadas con bcrypt en SQLite, no en
+# texto plano en producción, y se recomienda cambiarlas desde la UI apenas
+# se usa fuera de pruebas locales. Se ignoran por coincidencia exacta (no por
+# archivo completo) para no tapar un secreto real que se agregue después en
+# los mismos archivos.
+secret:
+  ignored_matches:
+    - name: demo-admin-password
+      match: admin123
+    - name: demo-analista-password
+      match: analista123
+    - name: demo-viewer-password
+      match: viewer123

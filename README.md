@@ -64,32 +64,63 @@ Plataforma unificada de respuesta preliminar y análisis forense rápido frente 
 
 ## 🚀 Despliegue y Ejecución Rápida
 
-### 1. Requisitos Previos (Dependencia de Zbar)
+### Opción recomendada: Docker
 
-Anzuelo requiere la librería C de `zbar` instalada en el sistema para decodificar códigos QR mediante `pyzbar`. Según tu distribución de Linux, instalala con el gestor correspondiente:
-
-**Arch Linux / CachyOS:**
-```bash
-sudo pacman -S --needed zbar
-```
-
-**Ubuntu / Debian / Linux Mint:**
-```bash
-sudo apt install libzbar0
-```
-
-**Fedora / RHEL:**
-```bash
-sudo dnf install zbar
-```
-
-### 2. Clonar el Repositorio y Configurar el Entorno
+No necesitás instalar Python, `zbar` ni nada más en tu sistema — todo vive adentro del contenedor.
 
 ```bash
 git clone https://github.com/N1x-afl/anzuelo-osint.git
 cd anzuelo-osint
 
-# Crear y activar entorno virtual
+cp .env.example .env   # opcional, completá las keys de Threat Intelligence que tengas
+touch anzuelo.db        # importante: crea el archivo vacío ANTES del primer `up`,
+                         # si no Docker monta una carpeta en su lugar y falla
+
+docker compose up -d --build
+```
+
+Con eso queda escuchando en `http://localhost:8001`, en segundo plano (el `-d`). `anzuelo.db` vive en tu máquina (montado como volumen), así que el historial de incidentes y los usuarios sobreviven a cada `docker compose up --build` posterior.
+
+**Comandos de uso diario:**
+
+```bash
+docker compose up -d        # arrancar (si ya hiciste el build una vez, no hace falta --build de nuevo)
+docker compose logs -f      # ver logs en vivo
+docker compose down         # parar
+docker compose up -d --build   # reconstruir después de bajar cambios nuevos del repo (git pull)
+```
+
+**Que quede corriendo solo, incluso después de reiniciar la máquina:** `docker-compose.yml` ya tiene `restart: unless-stopped`, así que una vez que lo levantaste una vez con `docker compose up -d`, Docker lo va a reiniciar solo si se cae o si rearrancás el equipo — **siempre que el servicio de Docker en sí arranque al boot**. Confirmalo (una sola vez) con:
+
+```bash
+sudo systemctl enable --now docker
+```
+
+Con eso, de ahora en más alcanza con tener la máquina prendida: no hace falta volver a correr `docker compose up` manualmente después de cada reinicio.
+
+### Alternativa: entorno local sin Docker
+
+Si preferís correrlo directo con Python (útil para desarrollo/debug):
+
+**1. Instalar la librería nativa de `zbar`** (la necesita `pyzbar` para decodificar códigos QR):
+
+```bash
+# Arch Linux / CachyOS
+sudo pacman -S --needed zbar
+
+# Ubuntu / Debian / Linux Mint
+sudo apt install libzbar0
+
+# Fedora / RHEL
+sudo dnf install zbar
+```
+
+**2. Clonar, crear entorno virtual e instalar dependencias:**
+
+```bash
+git clone https://github.com/N1x-afl/anzuelo-osint.git
+cd anzuelo-osint
+
 python -m venv venv
 source venv/bin/activate.fish   # En Fish shell
 # source venv/bin/activate      # En Bash/Zsh
@@ -97,31 +128,14 @@ source venv/bin/activate.fish   # En Fish shell
 pip install -r requirements.txt
 ```
 
-### 3. Puesta en Marcha con Script Unificado
+**3. Arrancar:**
 
 ```bash
 chmod +x run.sh
 ./run.sh
 ```
 
-Por defecto el servicio queda escuchando en `0.0.0.0:8001` — accesible desde `http://localhost:8001` y desde cualquier equipo de la misma LAN por la IP física del host.
-
-### 4. Alternativa: Docker
-
-Si preferís no instalar Python/zbar directamente en tu sistema, Anzuelo también corre en un contenedor:
-
-```bash
-git clone https://github.com/N1x-afl/anzuelo-osint.git
-cd anzuelo-osint
-
-cp .env.example .env   # opcional, completá las keys que tengas
-touch anzuelo.db        # importante: crea el archivo vacío ANTES del primer `up`,
-                         # si no Docker monta una carpeta en su lugar y falla
-
-docker compose up --build
-```
-
-Con eso queda escuchando en `http://localhost:8001`, igual que con `run.sh`. `anzuelo.db` vive en tu máquina (montado como volumen), así que el historial de incidentes y los usuarios sobreviven a un `docker compose build` posterior. Para correrlo en segundo plano: `docker compose up -d --build`. Para pararlo: `docker compose down`.
+Igual que con Docker, queda escuchando en `0.0.0.0:8001` — accesible desde `http://localhost:8001` y desde cualquier equipo de la misma LAN por la IP física del host. A diferencia de Docker, acá sí tenés que dejar la terminal abierta (o usar `tmux`/`screen`/un servicio `systemd` propio) para que seguir corriendo.
 
 ---
 
