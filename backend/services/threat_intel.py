@@ -22,10 +22,12 @@ import whois as whois_lib
 VT_API_KEY = os.getenv("VIRUSTOTAL_API_KEY", "").strip()
 ABUSEIPDB_API_KEY = os.getenv("ABUSEIPDB_API_KEY", "").strip()
 ABUSECH_AUTH_KEY = os.getenv("ABUSECH_AUTH_KEY", "").strip()
+HIBP_API_KEY = os.getenv("HIBP_API_KEY", "").strip()
 
 VT_BASE = "https://www.virustotal.com/api/v3"
 ABUSEIPDB_BASE = "https://api.abuseipdb.com/api/v2"
 URLHAUS_BASE = "https://urlhaus-api.abuse.ch/v1"
+HIBP_BASE = "https://haveibeenpwned.com/api/v3"
 
 TIMEOUT = 6  # segundos — no queremos que una API externa lenta trabe el triage
 WHOIS_TIMEOUT = 8  # el protocolo WHOIS (puerto 43) suele ser más lento que una API REST
@@ -168,6 +170,47 @@ def check_url_urlhaus(url: str) -> dict:
         }
     except Exception as e:
         return _unavailable(f"Error consultando URLhaus: {e}")
+
+
+def check_email_hibp(email_address: str) -> dict:
+    """Brechas de datos conocidas donde apareció esta dirección de email (HaveIBeenPwned v3).
+
+    IMPORTANTE: a diferencia de VirusTotal/AbuseIPDB (gratuitas), el endpoint
+    /breachedaccount/ de HIBP requiere una API key de pago (desde ~USD 4.39/mes,
+    ver haveibeenpwned.com/API/Key) — no existe un tier gratuito para esta
+    consulta puntual. Sin HIBP_API_KEY configurada, esta función simplemente
+    degrada a "no disponible" como el resto de las fuentes de Threat Intel.
+    """
+    if not email_address:
+        return _unavailable("Sin dirección de email para consultar.")
+    if not HIBP_API_KEY:
+        return _unavailable("HIBP_API_KEY no configurada (requiere suscripción de pago, ver .env.example).")
+
+    try:
+        resp = requests.get(
+            f"{HIBP_BASE}/breachedaccount/{email_address}",
+            headers={"hibp-api-key": HIBP_API_KEY, "user-agent": "Anzuelo-OSINT"},
+            params={"truncateResponse": "true"},
+            timeout=TIMEOUT,
+        )
+        if resp.status_code == 404:
+            return {"available": True, "found": False}
+        if resp.status_code == 401:
+            return _unavailable("HIBP_API_KEY inválida o expirada.")
+        if resp.status_code == 429:
+            return _unavailable("Límite de rate de HIBP alcanzado, reintentar más tarde.")
+        resp.raise_for_status()
+
+        breaches = resp.json() or []
+        return {
+            "available": True,
+            "found": len(breaches) > 0,
+            "breach_count": len(breaches),
+            "breach_names": [b.get("Name") for b in breaches if isinstance(b, dict)],
+            "permalink": "https://haveibeenpwned.com/account/" + email_address,
+        }
+    except Exception as e:
+        return _unavailable(f"Error consultando HaveIBeenPwned: {e}")
 
 
 def _first(value):

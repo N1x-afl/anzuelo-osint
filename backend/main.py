@@ -81,7 +81,8 @@ def health():
         "threat_intel": {
             "virustotal_configured": bool(os.getenv("VIRUSTOTAL_API_KEY", "").strip()),
             "abuseipdb_configured": bool(os.getenv("ABUSEIPDB_API_KEY", "").strip()),
-            "urlhaus_configured": bool(os.getenv("ABUSECH_AUTH_KEY", "").strip())
+            "urlhaus_configured": bool(os.getenv("ABUSECH_AUTH_KEY", "").strip()),
+            "hibp_configured": bool(os.getenv("HIBP_API_KEY", "").strip())
         }
     }
 

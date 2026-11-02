@@ -35,9 +35,11 @@ class ForensicAnalyzer:
         received_hops = msg.get_all("Received", [])
 
         domain = ""
-        match_email = re.search(r"@([\w.-]+)", from_header)
+        sender_email = ""
+        match_email = re.search(r"([\w.+-]+@[\w.-]+)", from_header)
         if match_email:
-            domain = match_email.group(1).strip(">")
+            sender_email = match_email.group(1).strip(">")
+            domain = sender_email.split("@", 1)[1]
 
         spf_status = "NOT_FOUND"
         dmarc_status = "NOT_FOUND"
@@ -99,6 +101,15 @@ class ForensicAnalyzer:
             elif age_days < 180:
                 risk_score += 20
 
+        # Threat Intelligence: ¿esta dirección de email (la del remitente que
+        # dice ser, spoofeada o no) apareció en alguna brecha de datos conocida?
+        # Esto no detecta spoofing por sí solo, pero es una señal útil de
+        # contexto: una cuenta con historial de brechas es un blanco más
+        # probable de haber sido comprometida/reutilizada para enviar phishing.
+        ti_hibp = threat_intel.check_email_hibp(sender_email)
+        if ti_hibp.get("found"):
+            risk_score += 15
+
         risk_score = min(risk_score, 100)
 
         return {
@@ -115,7 +126,8 @@ class ForensicAnalyzer:
             "verdict": "Alto Riesgo (Spoofing probable)" if risk_score >= 60 else "Bajo Riesgo / Alineado",
             "threat_intel": {
                 "virustotal_domain": ti_domain,
-                "whois_domain": ti_whois
+                "whois_domain": ti_whois,
+                "hibp_email": ti_hibp
             }
         }
 

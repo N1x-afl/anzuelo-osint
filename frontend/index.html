@@ -844,7 +844,8 @@
       abuseipdb_ip: 'AbuseIPDB (IP)',
       urlhaus: 'URLhaus (abuse.ch)',
       urlhaus_first_url: 'URLhaus (primer link)',
-      whois_domain: 'WHOIS (edad del dominio)'
+      whois_domain: 'WHOIS (edad del dominio)',
+      hibp_email: 'HaveIBeenPwned (brechas del email)'
     };
 
     function renderThreatIntelBlock(ti) {
@@ -882,6 +883,12 @@
           statusHtml = `<span class="${cls}">score ${score}/100 (${v.total_reports || 0} reportes)</span>`;
         } else if ('threat' in v || 'url_status' in v) {
           statusHtml = `<span class="text-rose-400 font-bold">⚠ en lista negra${v.threat ? ` (${v.threat})` : ''}</span>`;
+        } else if ('breach_count' in v) {
+          const n = v.breach_count || 0;
+          statusHtml = `<span class="text-rose-400 font-bold">⚠ en ${n} brecha${n === 1 ? '' : 's'} conocida${n === 1 ? '' : 's'}</span>`;
+          if (v.breach_names && v.breach_names.length) {
+            detailHtml += `<div class="text-slate-600 text-[10px]">${v.breach_names.join(', ')}</div>`;
+          }
         } else {
           statusHtml = `<span class="text-amber-400">encontrado</span>`;
         }

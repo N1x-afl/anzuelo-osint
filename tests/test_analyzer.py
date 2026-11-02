@@ -120,6 +120,45 @@ def test_analyze_email_headers_no_from_domain_handles_gracefully():
     assert result["spf"] == "NOT_FOUND"
 
 
+@patch("backend.services.analyzer.threat_intel.check_email_hibp")
+@patch("backend.services.analyzer.threat_intel.check_domain_whois")
+@patch("backend.services.analyzer.threat_intel.check_domain_virustotal")
+def test_analyze_email_headers_hibp_breach_bumps_score_and_passes_full_email(mock_vt, mock_whois, mock_hibp):
+    """check_email_hibp debe recibir la dirección completa (local@dominio), no
+    solo el dominio — y un hallazgo positivo debe sumar al risk_score y
+    quedar expuesto en threat_intel.hibp_email para el frontend."""
+    mock_vt.return_value = {"available": False, "reason": "sin key"}
+    mock_whois.return_value = {"available": False, "reason": "sin red"}
+    mock_hibp.return_value = {"available": True, "found": True, "breach_count": 2, "breach_names": ["Adobe", "LinkedIn"]}
+
+    with patch("backend.services.analyzer.dns.resolver.Resolver") as mock_resolver_cls:
+        mock_resolver = MagicMock()
+        mock_resolver.resolve.side_effect = Exception("NXDOMAIN")
+        mock_resolver_cls.return_value = mock_resolver
+        result = ForensicAnalyzer.analyze_email_headers(_RAW_HEADERS)
+
+    mock_hibp.assert_called_once_with("soporte@dominio-sospechoso.test")
+    assert result["threat_intel"]["hibp_email"]["breach_count"] == 2
+    assert result["risk_score"] == 100  # ya saturado por SPF+DMARC+MX; confirma que no rompe el cap
+
+
+def test_analyze_email_headers_hibp_without_key_degrades_without_network():
+    """Sin HIBP_API_KEY configurada (caso por defecto), no debe haber llamada
+    de red real — threat_intel.check_email_hibp degrada por su cuenta."""
+    with patch("backend.services.analyzer.threat_intel.check_domain_whois") as mock_whois, \
+         patch("backend.services.analyzer.threat_intel.check_domain_virustotal") as mock_vt, \
+         patch("backend.services.analyzer.dns.resolver.Resolver") as mock_resolver_cls, \
+         patch("backend.services.analyzer.threat_intel.HIBP_API_KEY", ""):
+        mock_vt.return_value = {"available": False, "reason": "sin key"}
+        mock_whois.return_value = {"available": False, "reason": "sin red"}
+        mock_resolver = MagicMock()
+        mock_resolver.resolve.side_effect = Exception("NXDOMAIN")
+        mock_resolver_cls.return_value = mock_resolver
+        result = ForensicAnalyzer.analyze_email_headers(_RAW_HEADERS)
+
+    assert result["threat_intel"]["hibp_email"]["available"] is False
+
+
 # ---------------------------------------------------------------------------
 # analyze_url_chain
 # ---------------------------------------------------------------------------

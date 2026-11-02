@@ -54,7 +54,7 @@ Plataforma unificada de respuesta preliminar y análisis forense rápido frente 
 - **Frontend:** HTML5 semántico + Tailwind CSS (CDN) + FontAwesome (CDN)
 - **Procesamiento de Imágenes & Códigos:** `Pillow`, `pyzbar` (librería nativa `zbar`)
 - **Resolución Forense de Red:** `dnspython`, `requests`, `socket`
-- **Threat Intelligence:** VirusTotal API v3, AbuseIPDB API v2, URLhaus API (abuse.ch), WHOIS (`python-whois`) — vía `backend/services/threat_intel.py`, configurables por `.env` (`python-dotenv`)
+- **Threat Intelligence:** VirusTotal API v3, AbuseIPDB API v2, URLhaus API (abuse.ch), WHOIS (`python-whois`), HaveIBeenPwned API v3 (brechas del email remitente) — vía `backend/services/threat_intel.py`, configurables por `.env` (`python-dotenv`)
 - **Exportación de Evidencia:** `reportlab` (PDF forense con hash de integridad) y `csv` (stdlib) — vía `backend/services/report_export.py`
 - **Autenticación:** `PyJWT`, `bcrypt`, `slowapi` (rate limiting) — vía `backend/services/auth.py`
 - **Almacenamiento:** SQLite3 (`anzuelo.db`, local — no versionado en git)
@@ -171,6 +171,7 @@ Además del análisis heurístico local (SPF/DMARC, patrones de SMS, cadena de r
 | [AbuseIPDB](https://www.abuseipdb.com/register) | Score de abuso de la IP resuelta (0-100) | Sí | 1000 req/día |
 | [URLhaus](https://urlhaus.abuse.ch/) (abuse.ch) | Si la URL está en su base pública de malware/phishing | Sí (desde 2025) | Gratuita, [auth.abuse.ch](https://auth.abuse.ch/) |
 | WHOIS | Edad del dominio (días desde su registro) y registrador — un dominio recién creado es una señal fuerte de phishing | No | Protocolo público (puerto 43) |
+| [HaveIBeenPwned](https://haveibeenpwned.com/API/Key) | Si el email del remitente apareció en alguna brecha de datos conocida | Sí | **No tiene plan gratuito** — desde ~USD 4.39/mes (plan "Core 1") |
 
 **La app funciona igual sin ninguna key configurada** — cada fuente no configurada se muestra como "no disponible" en el resultado y no afecta el resto del análisis.
 
@@ -224,7 +225,7 @@ pytest -v
 | Archivo | Qué cubre |
 |---|---|
 | `tests/test_analyzer.py` | Heurísticas de email/SMS/URL/QR (`ForensicAnalyzer`), incluyendo cálculo de `risk_score` |
-| `tests/test_threat_intel.py` | VirusTotal, AbuseIPDB, URLhaus, WHOIS — degradación sin key, errores de red, matches positivos |
+| `tests/test_threat_intel.py` | VirusTotal, AbuseIPDB, URLhaus, WHOIS, HaveIBeenPwned — degradación sin key, errores de red, matches positivos |
 | `tests/test_auth_service.py` | Hashing bcrypt, emisión/validación de JWT, tokens vencidos o adulterados |
 | `tests/test_report_export.py` | Generación de CSV/PDF, hash de integridad |
 | `tests/test_api.py` | Integración end-to-end vía `TestClient`: login, roles, rate limiting, y los flujos de análisis/historial/export completos |

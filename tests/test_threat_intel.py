@@ -184,6 +184,77 @@ def test_whois_connection_error_degrades_gracefully():
     assert "timed out" in result["reason"]
 
 
+# ---------------------------------------------------------------------------
+# HaveIBeenPwned: sin key, 404 (sin brechas), match positivo, 401, 429
+# ---------------------------------------------------------------------------
+
+def test_hibp_without_key_degrades_without_network():
+    with patch.object(threat_intel, "HIBP_API_KEY", ""):
+        with patch("backend.services.threat_intel.requests.get") as mock_get:
+            result = threat_intel.check_email_hibp("victima@example.com")
+            mock_get.assert_not_called()
+    assert result["available"] is False
+    assert "HIBP_API_KEY" in result["reason"]
+
+
+def test_hibp_without_email_degrades_without_network():
+    result = threat_intel.check_email_hibp("")
+    assert result == {"available": False, "reason": "Sin dirección de email para consultar."}
+
+
+def test_hibp_404_means_no_breaches():
+    with patch.object(threat_intel, "HIBP_API_KEY", "key-valida"):
+        with patch("backend.services.threat_intel.requests.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 404
+            mock_get.return_value = mock_resp
+            result = threat_intel.check_email_hibp("limpio@example.com")
+
+    assert result == {"available": True, "found": False}
+
+
+def test_hibp_found_breaches_returns_names_and_count():
+    with patch.object(threat_intel, "HIBP_API_KEY", "key-valida"):
+        with patch("backend.services.threat_intel.requests.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.raise_for_status = lambda: None
+            mock_resp.json.return_value = [{"Name": "Adobe"}, {"Name": "LinkedIn"}]
+            mock_get.return_value = mock_resp
+            result = threat_intel.check_email_hibp("filtrado@example.com")
+            _, kwargs = mock_get.call_args
+            assert kwargs["headers"]["hibp-api-key"] == "key-valida"
+
+    assert result["available"] is True
+    assert result["found"] is True
+    assert result["breach_count"] == 2
+    assert result["breach_names"] == ["Adobe", "LinkedIn"]
+
+
+def test_hibp_401_means_invalid_key():
+    with patch.object(threat_intel, "HIBP_API_KEY", "key-invalida"):
+        with patch("backend.services.threat_intel.requests.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 401
+            mock_get.return_value = mock_resp
+            result = threat_intel.check_email_hibp("alguien@example.com")
+
+    assert result["available"] is False
+    assert "inválida" in result["reason"]
+
+
+def test_hibp_429_degrades_without_crashing():
+    with patch.object(threat_intel, "HIBP_API_KEY", "key-valida"):
+        with patch("backend.services.threat_intel.requests.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 429
+            mock_get.return_value = mock_resp
+            result = threat_intel.check_email_hibp("alguien@example.com")
+
+    assert result["available"] is False
+    assert "rate" in result["reason"]
+
+
 def test_whois_empty_hostname_degrades_without_network():
     with patch("backend.services.threat_intel.whois_lib.whois") as mock_whois:
         result = threat_intel.check_domain_whois("")
