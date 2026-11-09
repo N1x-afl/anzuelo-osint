@@ -388,9 +388,14 @@
             <i class="fa-solid fa-envelope-open-text text-cyan-400"></i> Cabeceras RFC 822 / Raw Email Triage
           </h3>
           <textarea id="email-raw" rows="6" placeholder="Pegá acá las cabeceras completas del correo para análisis..." class="w-full rounded-lg p-3 text-xs font-mono"></textarea>
-          <button id="btn-analyze-email" onclick="analyzeEmail()" class="scan-btn mt-4 px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold rounded-lg text-xs font-mono transition neon-glow-cyan flex items-center gap-2">
-            <i class="fa-solid fa-bolt"></i> EJECUTAR TRIAGE SPF/DKIM/DMARC
-          </button>
+          <div class="mt-4 flex items-center gap-2">
+            <button id="btn-analyze-email" onclick="analyzeEmail()" class="scan-btn px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold rounded-lg text-xs font-mono transition neon-glow-cyan flex items-center gap-2">
+              <i class="fa-solid fa-bolt"></i> EJECUTAR TRIAGE SPF/DKIM/DMARC
+            </button>
+            <button id="btn-clear-email" onclick="clearEmailPanel()" class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-400 hover:text-white rounded-lg text-xs font-mono transition flex items-center gap-2">
+              <i class="fa-solid fa-broom"></i> LIMPIAR
+            </button>
+          </div>
         </div>
         <div id="email-results" class="hidden soc-panel p-5 rounded-xl text-xs font-mono space-y-2"></div>
       </section>
@@ -920,6 +925,14 @@
           ${rows}
         </div>
       `;
+    }
+
+    function clearEmailPanel() {
+      document.getElementById('email-raw').value = '';
+      const resDiv = document.getElementById('email-results');
+      resDiv.innerHTML = '';
+      resDiv.classList.add('hidden');
+      document.getElementById('email-raw').focus();
     }
 
     async function analyzeEmail() {
