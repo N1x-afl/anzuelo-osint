@@ -31,17 +31,78 @@ def test_analyze_sms_low_risk_message():
     assert result["is_smishing_probable"] is False
 
 
-def test_analyze_sms_extracts_urls():
+@patch("backend.services.analyzer.threat_intel.check_domain_whois")
+@patch("backend.services.analyzer.threat_intel.check_ip_abuseipdb")
+@patch("backend.services.analyzer.threat_intel.check_url_urlhaus")
+@patch("backend.services.analyzer.threat_intel.check_url_virustotal")
+@patch("backend.services.analyzer.socket.gethostbyname")
+@patch("backend.services.analyzer.requests.Session")
+def test_analyze_sms_extracts_urls_and_runs_full_url_scan(
+    mock_session_cls, mock_gethostbyname, mock_vt_url, mock_urlhaus, mock_abuseipdb, mock_whois
+):
+    """Desde el escaneo completo, el primer link del SMS corre la MISMA
+    cadena de threat intel que la pestaña de URL/QR (no solo URLhaus) — este
+    test confirma que analyze_url_chain efectivamente se invoca con la URL
+    extraída, y que su resultado completo queda expuesto en "url_analysis"."""
+    mock_session = MagicMock()
+    mock_response = MagicMock()
+    mock_response.history = []
+    mock_response.status_code = 200
+    mock_session.get.return_value = mock_response
+    mock_session_cls.return_value = mock_session
+    mock_gethostbyname.return_value = "8.8.8.8"
+
+    mock_vt_url.return_value = {"available": False, "reason": "sin key"}
+    mock_urlhaus.return_value = {"available": True, "found": False}
+    mock_abuseipdb.return_value = {"available": False, "reason": "sin key"}
+    mock_whois.return_value = {"available": False, "reason": "sin red"}
+
     text = "Verificá tu cuenta en http://bit.ly/falso urgente"
     result = ForensicAnalyzer.analyze_sms(text)
+
     assert result["extracted_urls"] == ["http://bit.ly/falso"]
-    # threat_intel se consulta pero sin ABUSECH_AUTH_KEY configurada degrada sin red
+    assert result["url_analysis"] is not None
+    assert result["url_analysis"]["hostname"] == "bit.ly"
+    # la clave vieja sigue disponible (espejada desde url_analysis), para no
+    # romper historiales/exports ya guardados que la leen directo
     ti = result["threat_intel"]["urlhaus_first_url"]
-    assert ti["available"] is False
+    assert ti == {"available": True, "found": False}
 
 
-def test_analyze_sms_no_urls_skips_urlhaus():
+@patch("backend.services.analyzer.threat_intel.check_domain_whois")
+@patch("backend.services.analyzer.threat_intel.check_ip_abuseipdb")
+@patch("backend.services.analyzer.threat_intel.check_url_urlhaus")
+@patch("backend.services.analyzer.threat_intel.check_url_virustotal")
+@patch("backend.services.analyzer.socket.gethostbyname")
+@patch("backend.services.analyzer.requests.Session")
+def test_analyze_sms_malicious_link_flags_smishing_even_without_trigger_words(
+    mock_session_cls, mock_gethostbyname, mock_vt_url, mock_urlhaus, mock_abuseipdb, mock_whois
+):
+    """Un link confirmado como malicioso (URLhaus) debe marcar el SMS como
+    smishing probable aunque el texto no tenga ninguna palabra gatillo."""
+    mock_session = MagicMock()
+    mock_response = MagicMock()
+    mock_response.history = []
+    mock_response.status_code = 200
+    mock_session.get.return_value = mock_response
+    mock_session_cls.return_value = mock_session
+    mock_gethostbyname.return_value = "8.8.8.8"
+
+    mock_vt_url.return_value = {"available": False, "reason": "sin key"}
+    mock_urlhaus.return_value = {"available": True, "found": True, "threat": "malware_download"}
+    mock_abuseipdb.return_value = {"available": False, "reason": "sin key"}
+    mock_whois.return_value = {"available": False, "reason": "sin red"}
+
+    result = ForensicAnalyzer.analyze_sms("mirá esto http://bit.ly/malo")
+
+    assert result["matched_triggers"] == []
+    assert result["url_analysis"]["risk_score"] >= 60
+    assert result["is_smishing_probable"] is True
+
+
+def test_analyze_sms_no_urls_skips_url_scan():
     result = ForensicAnalyzer.analyze_sms("mensaje sin links, solo urgente")
+    assert result["url_analysis"] is None
     ti = result["threat_intel"]["urlhaus_first_url"]
     assert ti["available"] is False
     assert "Sin URLs" in ti["reason"]

@@ -156,15 +156,22 @@ class ForensicAnalyzer:
         urls = re.findall(r'(https?://[^\s]+)', text)
         urgency_score = min(len(matched_triggers) * 25, 100)
 
-        # Threat Intelligence: el primer link del mensaje contra URLhaus
-        ti_urlhaus = threat_intel.check_url_urlhaus(urls[0]) if urls else {"available": False, "reason": "Sin URLs en el mensaje."}
-        if ti_urlhaus.get("found"):
-            urgency_score = min(urgency_score + 40, 100)
+        # Escaneo completo (no solo URLhaus): el primer link del mensaje pasa
+        # por la MISMA cadena de threat intel que la pestaña de URL/QR
+        # (VirusTotal, URLhaus, AbuseIPDB, WHOIS, protección anti-SSRF en los
+        # redirects) — así un smishing con un acortador que termina en una IP
+        # maliciosa conocida también queda detectado, no solo el link crudo.
+        url_analysis = ForensicAnalyzer.analyze_url_chain(urls[0]) if urls else None
+        if url_analysis:
+            if url_analysis["risk_score"] >= 60:
+                urgency_score = min(urgency_score + 40, 100)
+            elif url_analysis["risk_score"] >= 20:
+                urgency_score = min(urgency_score + 15, 100)
 
         is_smishing_probable = (
             urgency_score >= 50
             or (len(urls) > 0 and urgency_score >= 25)
-            or ti_urlhaus.get("found", False)
+            or (url_analysis is not None and url_analysis["risk_score"] >= 60)
         )
 
         return {
@@ -173,8 +180,13 @@ class ForensicAnalyzer:
             "matched_triggers": matched_triggers,
             "extracted_urls": urls,
             "is_smishing_probable": is_smishing_probable,
+            "url_analysis": url_analysis,
             "threat_intel": {
-                "urlhaus_first_url": ti_urlhaus
+                # Se mantiene por compatibilidad con historiales/exports previos
+                # que ya tenían esta clave — ahora espejada desde url_analysis.
+                "urlhaus_first_url": (url_analysis or {}).get("threat_intel", {}).get(
+                    "urlhaus", {"available": False, "reason": "Sin URLs en el mensaje."}
+                )
             }
         }
 
