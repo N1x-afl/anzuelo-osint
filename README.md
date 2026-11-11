@@ -19,7 +19,7 @@ Plataforma unificada de respuesta preliminar y análisis forense rápido frente 
 - **Threat Intelligence Externo (opcional):** Enriquecimiento de dominios, URLs e IPs contra VirusTotal, AbuseIPDB y URLhaus — ver sección dedicada más abajo.
 - **Persistencia Local con SQLite:** Registro de auditoría integrado para trazabilidad de incidentes sin dependencias de bases de datos externas.
 - **Exportación de Evidencia (CSV / PDF forense):** Historial completo a CSV, informe PDF resumen de todos los incidentes, o informe PDF individual por incidente con hash SHA-256 de integridad (cadena de custodia) — ver sección dedicada más abajo.
-- **Autenticación Real + Rate Limiting:** Login respaldado por backend (bcrypt + JWT), roles (admin/analista/viewer) y límite de intentos para frenar fuerza bruta — ver sección dedicada más abajo.
+- **Autenticación Real + Rate Limiting:** Login respaldado por backend (bcrypt + JWT), un único usuario admin y límite de intentos para frenar fuerza bruta — ver sección dedicada más abajo.
 - **Dockerizado:** `Dockerfile` + `docker-compose.yml` listos para levantar todo con un comando, sin instalar Python/zbar en el host.
 - **Suite de Tests + CI:** 63 tests automatizados (pytest) cubriendo heurísticas, Threat Intelligence, auth y export, corridos en cada push/PR vía GitHub Actions — ver sección dedicada más abajo.
 - **Arquitectura de Proceso Único:** Backend en FastAPI y Frontend (HTML/Tailwind CSS) servidos bajo el mismo socket y proceso, accesible localmente o mediante la IP física de la LAN.
@@ -149,15 +149,13 @@ Desde esta versión, el login es **autenticación real del lado del backend**, n
 - **Rate limiting** (vía `slowapi`) en login y cambio de clave: 5 intentos/minuto por IP, para frenar fuerza bruta. Los endpoints de análisis están limitados a 20 req/minuto.
 - Podés cambiar tu clave desde la UI (botón "Clave" en el header) una vez logueado.
 
-La tabla `users` se siembra automáticamente la primera vez que corre `init_db()`, con los mismos 3 perfiles demo que ya conocías — pero ahora son usuarios reales validados en el backend, no un hardcode del frontend:
+La tabla `users` se siembra automáticamente la primera vez que corre `init_db()`, con un único perfil admin (Anzuelo es de uso personal/compartido entre un par de personas de confianza, no multi-tenant — las versiones anteriores traían también perfiles demo "analista"/"viewer", retirados por no sumar nada en ese escenario):
 
 | Perfil | Usuario | Clave inicial |
 |---|---|---|
 | Admin | `admin` | `admin123` |
-| Analista OSINT | `analista` | `analista123` |
-| Visualizador | `viewer` | `viewer123` |
 
-**Recomendado si vas a usarlo más allá de pruebas locales:** cambiá estas 3 claves apenas lo levantes (botón "Clave"), y fijá un `ANZUELO_JWT_SECRET` propio en `.env` — si no lo configurás, se genera uno aleatorio en cada arranque del backend, lo que invalida todas las sesiones activas cada vez que reiniciás el proceso.
+**Recomendado si vas a usarlo más allá de pruebas locales:** cambiá esta clave apenas lo levantes (botón "Clave"), y fijá un `ANZUELO_JWT_SECRET` propio en `.env` — si no lo configurás, se genera uno aleatorio en cada arranque del backend, lo que invalida todas las sesiones activas cada vez que reiniciás el proceso.
 
 ---
 

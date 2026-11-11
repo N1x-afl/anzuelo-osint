@@ -3,9 +3,10 @@ Autenticación real para Anzuelo (reemplaza el login de fachada frontend-only).
 
 - Contraseñas hasheadas con bcrypt (nunca en texto plano, ni siquiera las demo).
 - Sesión vía JWT firmado (HS256), enviado como `Authorization: Bearer <token>`.
-- 3 roles: admin, analista, viewer. "admin" es el único que puede vaciar el
-  historial (least privilege). El resto de los endpoints de análisis/export
-  requieren solo estar autenticado, sin distinción de rol.
+- Un único usuario (admin) — Anzuelo es de uso personal/compartido entre un
+  par de personas de confianza, no multi-tenant. Se mantiene el campo "role"
+  y require_admin() por si en el futuro hiciera falta un segundo perfil con
+  menos permisos, pero hoy no hay perfiles demo con otro rol.
 
 ANZUELO_JWT_SECRET (.env): si no está configurada, se genera una aleatoria al
 arrancar el proceso — funciona, pero invalida todas las sesiones activas cada

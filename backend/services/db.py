@@ -5,14 +5,16 @@ from datetime import datetime
 
 DB_PATH = Path(__file__).resolve().parent.parent.parent / "anzuelo.db"
 
-# Perfiles demo — mismas credenciales que ya estaban documentadas en el README
-# (ver sección "Notas de Seguridad"). Solo se usan para sembrar la tabla la
-# primera vez que se crea; a partir de ahí, cambiar la clave desde la UI
-# ("Clave" → Cambiar Contraseña) actualiza el hash real en SQLite.
+# Perfil demo — misma credencial que ya estaba documentada en el README (ver
+# sección "Notas de Seguridad"). Solo se usa para sembrar la tabla la primera
+# vez que se crea; a partir de ahí, cambiar la clave desde la UI ("Clave" →
+# Cambiar Contraseña) actualiza el hash real en SQLite.
+#
+# Anzuelo es de uso personal/compartido entre un par de personas de
+# confianza (no multi-tenant), así que un solo usuario administrador alcanza
+# — se descartaron los perfiles demo "analista"/"viewer" que existían antes.
 _DEFAULT_USERS = [
     ("admin", "admin123", "admin"),
-    ("analista", "analista123", "analista"),
-    ("viewer", "viewer123", "viewer"),
 ]
 
 

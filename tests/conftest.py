@@ -51,10 +51,3 @@ def admin_token(client):
     resp = client.post("/api/auth/login", json={"username": "admin", "password": "admin123"})
     assert resp.status_code == 200
     return resp.json()["access_token"]
-
-
-@pytest.fixture()
-def viewer_token(client):
-    resp = client.post("/api/auth/login", json={"username": "viewer", "password": "viewer123"})
-    assert resp.status_code == 200
-    return resp.json()["access_token"]

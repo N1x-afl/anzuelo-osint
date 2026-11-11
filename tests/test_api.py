@@ -53,23 +53,17 @@ def test_me_endpoint_rejects_garbage_token(client):
 
 
 # ---------------------------------------------------------------------------
-# Control de roles
+# Historial (Anzuelo ya no siembra perfiles "analista"/"viewer" — un solo
+# usuario admin alcanza para el uso personal/compartido que tiene la app —
+# así que los tests de control de roles no-admin se retiraron junto con
+# esos perfiles demo; require_admin() en auth.py queda disponible por si en
+# el futuro hiciera falta un segundo perfil con menos permisos)
 # ---------------------------------------------------------------------------
-
-def test_viewer_cannot_clear_history(client, viewer_token):
-    resp = client.delete("/api/history", headers=auth_headers(viewer_token))
-    assert resp.status_code == 403
-
 
 def test_admin_can_clear_history(client, admin_token):
     resp = client.delete("/api/history", headers=auth_headers(admin_token))
     assert resp.status_code == 200
     assert resp.json()["success"] is True
-
-
-def test_viewer_can_still_read_history(client, viewer_token):
-    resp = client.get("/api/history", headers=auth_headers(viewer_token))
-    assert resp.status_code == 200
 
 
 # ---------------------------------------------------------------------------
